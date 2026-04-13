@@ -1,13 +1,13 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import '../models/parsed_payment_notification.dart';
+import '../models/payment_notify_request.dart';
 
 class ApiService {
-  static const String baseUrl = "https://webhook.site/fd81279e-3822-4cea-9a37-46a271146fe4";
-  static const String endpoint = "";
+  static const String baseUrl = "http://172.16.2.170:8080";
+  static const String endpoint = "/api/payment/notify";
 
-  static Future<bool> sendParsedNotification(
-    ParsedPaymentNotification notification,
+  static Future<bool> sendPaymentNotification(
+    PaymentNotifyRequest request,
   ) async {
     try {
       final response = await http.post(
@@ -15,8 +15,11 @@ class ApiService {
         headers: {
           "Content-Type": "application/json",
         },
-        body: jsonEncode(notification.toJson()),
+        body: jsonEncode(request.toJson()),
       );
+
+      print("Notify API status: ${response.statusCode}");
+      print("Notify API body: ${response.body}");
 
       return response.statusCode >= 200 && response.statusCode < 300;
     } catch (e) {

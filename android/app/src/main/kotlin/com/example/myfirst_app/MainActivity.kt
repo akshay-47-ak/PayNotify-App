@@ -32,4 +32,9 @@ class MainActivity : FlutterActivity() {
             }
         }
     }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        methodChannel = null
+    }
 }
