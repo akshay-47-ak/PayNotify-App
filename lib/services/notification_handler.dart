@@ -85,11 +85,6 @@ class NotificationHandler {
   print("STEP 1 - processNotification entered");
   print("STEP 2 - currentPaymentId = '$currentPaymentId'");
 
-  if (currentPaymentId.isEmpty) {
-    print("STEP 3 - Payment ID empty, returning false");
-    return false;
-  }
-
   final likely = isLikelyPaymentNotification(notification);
   print("STEP 4 - isLikelyPaymentNotification = $likely");
 
