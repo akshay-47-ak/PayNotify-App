@@ -1,9 +1,12 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
 import 'models/payment_notification.dart';
+import 'services/api_service.dart';
 import 'services/notification_handler.dart';
 
-void main() {             
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const MyApp());
 }
@@ -39,40 +42,96 @@ class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController paymentIdController = TextEditingController();
   final List<String> logs = [];
 
+  Timer? paymentSyncTimer;
+  String currentSyncedPaymentId = "";
+
   @override
   void initState() {
     super.initState();
 
+    _startPaymentSync();
+
     _channel.setMethodCallHandler((call) async {
-  if (call.method == "onNotificationReceived") {
-    print("Raw native notification data: ${call.arguments}");
+      if (call.method == "onNotificationReceived") {
+        print("Raw native notification data: ${call.arguments}");
 
-    final data = Map<dynamic, dynamic>.from(call.arguments);
-    final notification = PaymentNotification.fromMap(data);
+        final data = Map<dynamic, dynamic>.from(call.arguments);
+        final notification = PaymentNotification.fromMap(data);
 
-    print("packageName = ${notification.packageName}");
-    print("title = ${notification.title}");
-    print("text = ${notification.text}");
-    print("subText = ${notification.subText}");
-    print("bigText = ${notification.bigText}");
+        print("packageName = ${notification.packageName}");
+        print("title = ${notification.title}");
+        print("text = ${notification.text}");
+        print("subText = ${notification.subText}");
+        print("bigText = ${notification.bigText}");
 
-    final sent = await NotificationHandler.processNotification(notification);
+        final result = await NotificationHandler.processNotification(notification);
 
-    setState(() {
-      logs.insert(
-        0,
-        "[${DateTime.now()}] ${notification.packageName} | ${notification.title} | sent=$sent | ${notification.text}",
-      );
+        if (!mounted) return;
+
+        setState(() {
+          logs.insert(
+            0,
+            "[${DateTime.now()}] "
+            "paymentId=${NotificationHandler.currentPaymentId} | "
+            "${notification.packageName} | "
+            "${notification.title} | "
+            "sent=${result["sent"]} | "
+            "status=${result["status"]} | "
+            "${notification.text}",
+          );
+        });
+      }
     });
   }
-});
 
+  void _startPaymentSync() {
+    paymentSyncTimer?.cancel();
+
+    paymentSyncTimer = Timer.periodic(const Duration(seconds: 2), (_) async {
+      final response = await ApiService.fetchLatestPendingPayment();
+
+      if (response == null) {
+        return;
+      }
+
+      final success = response["success"] == true;
+      final data = response["data"];
+
+      if (!success || data == null) {
+        return;
+      }
+
+      final paymentId = (data["paymentId"] ?? "").toString().trim();
+
+      if (paymentId.isEmpty) {
+        return;
+      }
+
+      if (paymentId != currentSyncedPaymentId) {
+        currentSyncedPaymentId = paymentId;
+        NotificationHandler.setCurrentPaymentId(paymentId);
+
+        print("Synced currentPaymentId from backend = $paymentId");
+
+        if (!mounted) return;
+
+        setState(() {
+          paymentIdController.text = paymentId;
+          logs.insert(
+            0,
+            "[${DateTime.now()}] Synced Payment ID from backend: $paymentId",
+          );
+        });
+      }
+    });
   }
 
   Future<void> _openNotificationAccessSettings() async {
     try {
       await _channel.invokeMethod("openNotificationAccessSettings");
     } catch (e) {
+      if (!mounted) return;
+
       setState(() {
         logs.insert(0, "Failed to open settings: $e");
       });
@@ -82,9 +141,10 @@ class _HomeScreenState extends State<HomeScreen> {
   void _setPaymentId() {
     final paymentId = paymentIdController.text.trim();
     NotificationHandler.setCurrentPaymentId(paymentId);
+    currentSyncedPaymentId = paymentId;
 
     setState(() {
-      logs.insert(0, "Current Payment ID set: $paymentId");
+      logs.insert(0, "Current Payment ID set manually: $paymentId");
     });
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -94,12 +154,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
+    paymentSyncTimer?.cancel();
     paymentIdController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final activePaymentId = NotificationHandler.currentPaymentId;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text("Pay Alert Bridge"),
@@ -109,7 +172,7 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           children: [
             const Text(
-              "Enter payment ID, enable notification access, then payment notifications will be captured and sent to backend.",
+              "This app syncs the latest pending Payment ID from backend, listens for payment notifications, and sends them back to backend for exact transaction update.",
               style: TextStyle(fontSize: 16),
             ),
             const SizedBox(height: 16),
@@ -118,31 +181,69 @@ class _HomeScreenState extends State<HomeScreen> {
               decoration: const InputDecoration(
                 labelText: "Payment ID",
                 border: OutlineInputBorder(),
-                hintText: "Enter payment ID from QR generation API",
+                hintText: "Auto-synced from backend or enter manually",
               ),
             ),
             const SizedBox(height: 10),
-            ElevatedButton(
-              onPressed: _setPaymentId,
-              child: const Text("Set Payment ID"),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: _setPaymentId,
+                    child: const Text("Set Payment ID"),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: _openNotificationAccessSettings,
-              child: const Text("Enable Notification Access"),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: _openNotificationAccessSettings,
+                    child: const Text("Enable Notification Access"),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.sync),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        activePaymentId.isEmpty
+                            ? "No active Payment ID synced yet"
+                            : "Active Payment ID: $activePaymentId",
+                        style: const TextStyle(fontSize: 15),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
             const SizedBox(height: 20),
             const Align(
               alignment: Alignment.centerLeft,
               child: Text(
                 "Logs",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
             const SizedBox(height: 8),
             Expanded(
               child: logs.isEmpty
-                  ? const Center(child: Text("No notifications captured yet"))
+                  ? const Center(
+                      child: Text("No notifications captured yet"),
+                    )
                   : ListView.builder(
                       itemCount: logs.length,
                       itemBuilder: (context, index) {

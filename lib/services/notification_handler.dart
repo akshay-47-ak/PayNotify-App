@@ -27,10 +27,10 @@ class NotificationHandler {
     "credited to your account",
     "debited from your account",
     "paid you",
-"payment of rs",
-"received in bank",
-"bank transfer received",
-"collected from",
+    "payment of rs",
+    "received in bank",
+    "bank transfer received",
+    "collected from",
   ];
 
   static final List<String> weakKeywords = [
@@ -79,40 +79,63 @@ class NotificationHandler {
     return false;
   }
 
-  static Future<bool> processNotification(
-  PaymentNotification notification,
-) async {
-  print("STEP 1 - processNotification entered");
-  print("STEP 2 - currentPaymentId = '$currentPaymentId'");
+  static Future<Map<String, dynamic>> processNotification(
+    PaymentNotification notification,
+  ) async {
+    print("STEP 1 - processNotification entered");
+    print("STEP 2 - currentPaymentId = '$currentPaymentId'");
 
-  final likely = isLikelyPaymentNotification(notification);
-  print("STEP 4 - isLikelyPaymentNotification = $likely");
+    final likely = isLikelyPaymentNotification(notification);
+    print("STEP 3 - isLikelyPaymentNotification = $likely");
 
-  if (!likely) {
-    print("STEP 5 - Rejected by filter, returning false");
-    return false;
+    if (!likely) {
+      print("STEP 4 - Rejected by filter, returning false");
+      return {
+        "sent": false,
+        "status": "FILTERED",
+      };
+    }
+
+    if (currentPaymentId.isEmpty) {
+      print("STEP 5 - currentPaymentId empty, returning false");
+      return {
+        "sent": false,
+        "status": "NO_PAYMENT_ID",
+      };
+    }
+
+    final message = [
+      notification.text,
+      notification.subText ?? "",
+      notification.bigText ?? "",
+    ].where((e) => e.trim().isNotEmpty).join(" ").trim();
+
+    print("STEP 6 - message = '$message'");
+
+    final request = PaymentNotifyRequest(
+      paymentId: currentPaymentId,
+      packageName: notification.packageName,
+      title: notification.title,
+      message: message,
+    );
+
+    print("STEP 7 - request = ${request.toJson()}");
+
+    final response = await ApiService.sendPaymentNotification(request);
+    print("STEP 8 - API response = $response");
+
+    if (response == null) {
+      return {
+        "sent": false,
+        "status": "API_ERROR",
+      };
+    }
+
+    return {
+      "sent": true,
+      "status": (response["status"] ?? "UNKNOWN").toString(),
+      "paymentId": (response["paymentId"] ?? "").toString(),
+      "matched": response["matched"],
+    };
   }
-
-  final message = [
-    notification.text,
-    notification.subText ?? "",
-    notification.bigText ?? "",
-  ].where((e) => e.trim().isNotEmpty).join(" ").trim();
-
-  print("STEP 6 - message = '$message'");
-
-  final request = PaymentNotifyRequest(
-    paymentId: currentPaymentId,
-    packageName: notification.packageName,
-    title: notification.title,
-    message: message,
-  );
-
-  print("STEP 7 - request = ${request.toJson()}");
-
-  final result = await ApiService.sendPaymentNotification(request);
-  print("STEP 8 - API result = $result");
-
-  return result;
-}
 }
