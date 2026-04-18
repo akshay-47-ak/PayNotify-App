@@ -131,11 +131,15 @@ class NotificationHandler {
       };
     }
 
+    final data = response["data"] is Map<String, dynamic>
+        ? response["data"] as Map<String, dynamic>
+        : <String, dynamic>{};
+
     return {
       "sent": true,
-      "status": (response["status"] ?? "UNKNOWN").toString(),
-      "paymentId": (response["paymentId"] ?? "").toString(),
-      "matched": response["matched"],
+      "status": (data["status"] ?? "UNKNOWN").toString(),
+      "paymentId": (data["paymentId"] ?? "").toString(),
+      "matched": data["matched"],
     };
   }
 }

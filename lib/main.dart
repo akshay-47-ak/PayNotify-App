@@ -1,10 +1,9 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'models/payment_notification.dart';
-import 'services/api_service.dart';
 import 'services/notification_handler.dart';
+import 'services/websocket_service.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -42,14 +41,11 @@ class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController paymentIdController = TextEditingController();
   final List<String> logs = [];
 
-  Timer? paymentSyncTimer;
-  String currentSyncedPaymentId = "";
-
   @override
   void initState() {
     super.initState();
 
-    _startPaymentSync();
+    _connectWebSocket();
 
     _channel.setMethodCallHandler((call) async {
       if (call.method == "onNotificationReceived") {
@@ -84,34 +80,16 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  void _startPaymentSync() {
-    paymentSyncTimer?.cancel();
+  void _connectWebSocket() {
+    WebSocketService.connect(
+      onActivePaymentReceived: (data) {
+        final paymentId = (data["paymentId"] ?? "").toString().trim();
 
-    paymentSyncTimer = Timer.periodic(const Duration(seconds: 2), (_) async {
-      final response = await ApiService.fetchLatestPendingPayment();
+        if (paymentId.isEmpty) {
+          return;
+        }
 
-      if (response == null) {
-        return;
-      }
-
-      final success = response["success"] == true;
-      final data = response["data"];
-
-      if (!success || data == null) {
-        return;
-      }
-
-      final paymentId = (data["paymentId"] ?? "").toString().trim();
-
-      if (paymentId.isEmpty) {
-        return;
-      }
-
-      if (paymentId != currentSyncedPaymentId) {
-        currentSyncedPaymentId = paymentId;
         NotificationHandler.setCurrentPaymentId(paymentId);
-
-        print("Synced currentPaymentId from backend = $paymentId");
 
         if (!mounted) return;
 
@@ -119,11 +97,18 @@ class _HomeScreenState extends State<HomeScreen> {
           paymentIdController.text = paymentId;
           logs.insert(
             0,
-            "[${DateTime.now()}] Synced Payment ID from backend: $paymentId",
+            "[${DateTime.now()}] Active Payment ID received from WebSocket: $paymentId",
           );
         });
-      }
-    });
+      },
+      onConnectionLog: (message) {
+        if (!mounted) return;
+
+        setState(() {
+          logs.insert(0, "[${DateTime.now()}] $message");
+        });
+      },
+    );
   }
 
   Future<void> _openNotificationAccessSettings() async {
@@ -141,7 +126,6 @@ class _HomeScreenState extends State<HomeScreen> {
   void _setPaymentId() {
     final paymentId = paymentIdController.text.trim();
     NotificationHandler.setCurrentPaymentId(paymentId);
-    currentSyncedPaymentId = paymentId;
 
     setState(() {
       logs.insert(0, "Current Payment ID set manually: $paymentId");
@@ -154,7 +138,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
-    paymentSyncTimer?.cancel();
+    WebSocketService.disconnect();
     paymentIdController.dispose();
     super.dispose();
   }
@@ -172,7 +156,7 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           children: [
             const Text(
-              "This app syncs the latest pending Payment ID from backend, listens for payment notifications, and sends them back to backend for exact transaction update.",
+              "This app receives active Payment ID from backend WebSocket, listens for payment notifications, and sends them back to backend for exact transaction update.",
               style: TextStyle(fontSize: 16),
             ),
             const SizedBox(height: 16),
@@ -181,7 +165,7 @@ class _HomeScreenState extends State<HomeScreen> {
               decoration: const InputDecoration(
                 labelText: "Payment ID",
                 border: OutlineInputBorder(),
-                hintText: "Auto-synced from backend or enter manually",
+                hintText: "Auto-synced from backend WebSocket or enter manually",
               ),
             ),
             const SizedBox(height: 10),
@@ -218,7 +202,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     Expanded(
                       child: Text(
                         activePaymentId.isEmpty
-                            ? "No active Payment ID synced yet"
+                            ? "No active Payment ID received yet"
                             : "Active Payment ID: $activePaymentId",
                         style: const TextStyle(fontSize: 15),
                       ),
