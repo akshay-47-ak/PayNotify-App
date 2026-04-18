@@ -60,7 +60,8 @@ class _HomeScreenState extends State<HomeScreen> {
         print("subText = ${notification.subText}");
         print("bigText = ${notification.bigText}");
 
-        final result = await NotificationHandler.processNotification(notification);
+        final result =
+            await NotificationHandler.processNotification(notification);
 
         if (!mounted) return;
 
@@ -68,12 +69,13 @@ class _HomeScreenState extends State<HomeScreen> {
           logs.insert(
             0,
             "[${DateTime.now()}] "
-            "paymentId=${NotificationHandler.currentPaymentId} | "
+            "activePaymentId=${NotificationHandler.currentPaymentId} | "
+            "txnRef=${result["transactionRef"] ?? ""} | "
             "${notification.packageName} | "
             "${notification.title} | "
             "sent=${result["sent"]} | "
             "status=${result["status"]} | "
-            "${notification.text}",
+            "${result["message"] ?? notification.text}",
           );
         });
       }
@@ -128,11 +130,14 @@ class _HomeScreenState extends State<HomeScreen> {
     NotificationHandler.setCurrentPaymentId(paymentId);
 
     setState(() {
-      logs.insert(0, "Current Payment ID set manually: $paymentId");
+      logs.insert(
+        0,
+        "Active Payment ID set manually for display/debug: $paymentId",
+      );
     });
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Payment ID set successfully")),
+      const SnackBar(content: Text("Active Payment ID updated")),
     );
   }
 
@@ -156,14 +161,14 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           children: [
             const Text(
-              "This app receives active Payment ID from backend WebSocket, listens for payment notifications, and sends them back to backend for exact transaction update.",
+              "This app listens for UPI/payment notifications, extracts transaction reference from notification text, and sends it to backend. Active Payment ID from WebSocket is shown only for monitoring/debug.",
               style: TextStyle(fontSize: 16),
             ),
             const SizedBox(height: 16),
             TextField(
               controller: paymentIdController,
               decoration: const InputDecoration(
-                labelText: "Payment ID",
+                labelText: "Active Payment ID (optional / debug)",
                 border: OutlineInputBorder(),
                 hintText: "Auto-synced from backend WebSocket or enter manually",
               ),
@@ -174,7 +179,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 Expanded(
                   child: ElevatedButton(
                     onPressed: _setPaymentId,
-                    child: const Text("Set Payment ID"),
+                    child: const Text("Set Active Payment ID"),
                   ),
                 ),
               ],

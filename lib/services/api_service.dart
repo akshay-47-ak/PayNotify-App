@@ -22,7 +22,7 @@ class ApiService {
       print("Notify API body: ${response.body}");
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
-        return jsonDecode(response.body);
+        return jsonDecode(response.body) as Map<String, dynamic>;
       }
 
       return null;
