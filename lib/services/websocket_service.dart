@@ -7,7 +7,8 @@ class WebSocketService {
   static StompClient? _client;
 
   static void connect({
-    required Function(Map<String, dynamic>) onActivePaymentReceived,
+    required String terminalId,
+    required Function(Map<String, dynamic>) onTerminalEvent,
     required Function(String) onConnectionLog,
   }) {
     disconnect();
@@ -19,7 +20,7 @@ class WebSocketService {
           onConnectionLog("WebSocket connected");
 
           _client?.subscribe(
-            destination: "/topic/payment/active",
+            destination: "/topic/terminal/$terminalId",
             callback: (frame) {
               try {
                 final body = frame.body;
@@ -28,7 +29,7 @@ class WebSocketService {
                 }
 
                 final data = jsonDecode(body) as Map<String, dynamic>;
-                onActivePaymentReceived(data);
+                onTerminalEvent(data);
               } catch (e) {
                 onConnectionLog("WebSocket message parse error: $e");
               }

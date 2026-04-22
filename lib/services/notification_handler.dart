@@ -1,3 +1,4 @@
+import '../models/device_session.dart';
 import '../models/payment_notification.dart';
 import '../models/payment_notify_request.dart';
 import 'api_service.dart';
@@ -47,12 +48,6 @@ class NotificationHandler {
     "inr",
   ];
 
-  static String currentPaymentId = "";
-
-  static void setCurrentPaymentId(String paymentId) {
-    currentPaymentId = paymentId.trim();
-  }
-
   static bool isLikelyPaymentNotification(PaymentNotification notification) {
     final content = [
       notification.title,
@@ -61,12 +56,9 @@ class NotificationHandler {
       notification.bigText ?? "",
     ].join(" ").toLowerCase();
 
-    final isKnownPaymentApp =
-        paymentPackages.contains(notification.packageName);
-
+    final isKnownPaymentApp = paymentPackages.contains(notification.packageName);
     final strongMatch = strongKeywords.any((k) => content.contains(k));
-    final weakMatchCount =
-        weakKeywords.where((k) => content.contains(k)).length;
+    final weakMatchCount = weakKeywords.where((k) => content.contains(k)).length;
 
     if (isKnownPaymentApp && (strongMatch || weakMatchCount >= 2)) {
       return true;
@@ -107,29 +99,27 @@ class NotificationHandler {
     }
 
     final regex = RegExp(
-      r'([A-Z0-9]+(?:-[A-Z0-9]+)*-TXN(?:-[A-Z0-9]+)*|TXN[0-9A-Z\-_]+)',
+      r'([A-Z0-9]+(?:-[A-Z0-9]+)*-TXN(?:-[A-Z0-9]+)*|TXN[0-9A-Z\-_]+|PADM-TXN-[A-Z0-9\-_]+)',
       caseSensitive: false,
     );
 
     final match = regex.firstMatch(text);
-    if (match == null) {
-      return null;
-    }
-
-    return match.group(0)?.trim();
+    return match?.group(0)?.trim();
   }
 
   static Future<Map<String, dynamic>> processNotification(
     PaymentNotification notification,
+    DeviceSession? session,
   ) async {
-    print("STEP 1 - processNotification entered");
-    print("STEP 2 - active currentPaymentId = '$currentPaymentId'");
+    if (session == null) {
+      return {
+        "sent": false,
+        "status": "DEVICE_NOT_REGISTERED",
+      };
+    }
 
     final likely = isLikelyPaymentNotification(notification);
-    print("STEP 3 - isLikelyPaymentNotification = $likely");
-
     if (!likely) {
-      print("STEP 4 - Rejected by filter, returning false");
       return {
         "sent": false,
         "status": "FILTERED",
@@ -142,32 +132,18 @@ class NotificationHandler {
       message,
     ].where((e) => e.trim().isNotEmpty).join(" ").trim();
 
-    print("STEP 5 - message = '$message'");
-    print("STEP 6 - fullText = '$fullText'");
-
     final txnRef = extractTxnRef(fullText);
-    print("STEP 7 - extracted txnRef = '$txnRef'");
-
-    if (txnRef == null || txnRef.isEmpty) {
-      print("STEP 8 - txnRef not found");
-      return {
-        "sent": false,
-        "status": "TRANSACTION_REF_NOT_FOUND",
-        "message": message,
-      };
-    }
 
     final request = PaymentNotifyRequest(
+      enterpriseCode: session.enterpriseCode,
+      deviceIdentifier: session.deviceIdentifier,
       packageName: notification.packageName,
       title: notification.title,
       message: message,
       transactionRef: txnRef,
     );
 
-    print("STEP 9 - request = ${request.toJson()}");
-
     final response = await ApiService.sendPaymentNotification(request);
-    print("STEP 10 - API response = $response");
 
     if (response == null) {
       return {
@@ -186,8 +162,7 @@ class NotificationHandler {
       "sent": true,
       "status": (data["status"] ?? "UNKNOWN").toString(),
       "paymentId": (data["paymentId"] ?? "").toString(),
-      "transactionRef":
-          (data["transactionRef"] ?? txnRef).toString(),
+      "transactionRef": (data["transactionRef"] ?? txnRef ?? "").toString(),
       "matched": data["matched"],
       "message": message,
     };
