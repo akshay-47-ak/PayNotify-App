@@ -154,6 +154,18 @@ class NotificationHandler {
       };
     }
 
+    final apiSuccess = response["success"] == true;
+    final apiMessage = (response["message"] ?? "").toString();
+
+    if (!apiSuccess) {
+      return {
+        "sent": false,
+        "status": "BACKEND_ERROR",
+        "transactionRef": txnRef,
+        "message": apiMessage.isEmpty ? message : apiMessage,
+      };
+    }
+
     final data = response["data"] is Map<String, dynamic>
         ? response["data"] as Map<String, dynamic>
         : <String, dynamic>{};
@@ -164,7 +176,7 @@ class NotificationHandler {
       "paymentId": (data["paymentId"] ?? "").toString(),
       "transactionRef": (data["transactionRef"] ?? txnRef ?? "").toString(),
       "matched": data["matched"],
-      "message": message,
+      "message": (data["message"] ?? message).toString(),
     };
   }
 }

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -57,6 +59,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
   DeviceSession? currentSession;
 
+  String currentQrBase64 = "";
+  String currentQrPaymentId = "";
+  String currentQrTransactionRef = "";
+  String currentQrStatus = "";
+
   @override
   void initState() {
     super.initState();
@@ -77,7 +84,10 @@ class _HomeScreenState extends State<HomeScreen> {
     if (session != null) {
       enterpriseCodeController.text = session.enterpriseCode;
       deviceNameController.text = session.deviceName;
-      selectedRole = session.role;
+      selectedRole =
+          (session.role == "OWNER" || session.role == "CASHIER")
+              ? session.role
+              : "OWNER";
 
       _connectWebSocket(session.terminalId);
 
@@ -86,6 +96,7 @@ class _HomeScreenState extends State<HomeScreen> {
         "${session.role} | ${session.terminalId}",
       );
     } else {
+      selectedRole = "OWNER";
       _addLog("No saved device session found");
     }
   }
@@ -130,7 +141,22 @@ class _HomeScreenState extends State<HomeScreen> {
         final paymentId = (data["paymentId"] ?? "").toString();
         final transactionRef = (data["transactionRef"] ?? "").toString();
         final message = (data["message"] ?? "").toString();
-        final amount = (data["amount"] ?? "").toString();
+        final qrImageBase64 = (data["qrImageBase64"] ?? "").toString();
+
+        if (!mounted) return;
+
+        setState(() {
+          if (qrImageBase64.isNotEmpty) {
+            currentQrBase64 = qrImageBase64;
+            currentQrPaymentId = paymentId;
+            currentQrTransactionRef = transactionRef;
+            currentQrStatus = status;
+          } else if (paymentId.isNotEmpty &&
+              paymentId == currentQrPaymentId &&
+              status.isNotEmpty) {
+            currentQrStatus = status;
+          }
+        });
 
         _addLog(
           "Terminal event | "
@@ -138,7 +164,6 @@ class _HomeScreenState extends State<HomeScreen> {
           "paymentId=$paymentId | "
           "status=$status | "
           "txnRef=$transactionRef | "
-          "amount=$amount | "
           "message=$message",
         );
       },
@@ -174,7 +199,24 @@ class _HomeScreenState extends State<HomeScreen> {
       );
 
       if (validationResponse == null) {
+        _addLog("Enterprise validation failed: null response");
         _showSnackBar("Enterprise validation failed");
+        return;
+      }
+
+      final validationSuccess = validationResponse["success"] == true;
+      final validationMessage =
+          (validationResponse["message"] ?? "").toString();
+
+      if (!validationSuccess) {
+        _addLog(
+          "Enterprise validation failed: ${validationMessage.isEmpty ? 'Unknown error' : validationMessage}",
+        );
+        _showSnackBar(
+          validationMessage.isEmpty
+              ? "Enterprise validation failed"
+              : validationMessage,
+        );
         return;
       }
 
@@ -182,6 +224,12 @@ class _HomeScreenState extends State<HomeScreen> {
           validationResponse["data"] is Map<String, dynamic>
               ? validationResponse["data"] as Map<String, dynamic>
               : <String, dynamic>{};
+
+      if (validationData.isEmpty) {
+        _addLog("Enterprise validation failed: empty data");
+        _showSnackBar("Enterprise validation failed");
+        return;
+      }
 
       final validationResult =
           EnterpriseValidationResponse.fromJson(validationData);
@@ -202,8 +250,11 @@ class _HomeScreenState extends State<HomeScreen> {
         "${validationResult.enterpriseName}",
       );
 
-      final deviceIdentifier =
-          "${validationResult.enterpriseCode}_${selectedRole}_${DateTime.now().millisecondsSinceEpoch}";
+      final localDeviceId =
+          await SessionService.getOrCreateLocalDeviceIdentifier();
+
+   final deviceIdentifier =
+           "${validationResult.enterpriseCode}_$localDeviceId";
 
       final registerResponse = await ApiService.registerDevice(
         DeviceRegistrationRequest(
@@ -215,7 +266,23 @@ class _HomeScreenState extends State<HomeScreen> {
       );
 
       if (registerResponse == null) {
+        _addLog("Device registration failed: null response");
         _showSnackBar("Device registration failed");
+        return;
+      }
+
+      final registerSuccess = registerResponse["success"] == true;
+      final registerMessage = (registerResponse["message"] ?? "").toString();
+
+      if (!registerSuccess) {
+        _addLog(
+          "Device registration failed: ${registerMessage.isEmpty ? 'Unknown error' : registerMessage}",
+        );
+        _showSnackBar(
+          registerMessage.isEmpty
+              ? "Device registration failed"
+              : registerMessage,
+        );
         return;
       }
 
@@ -224,7 +291,21 @@ class _HomeScreenState extends State<HomeScreen> {
               ? registerResponse["data"] as Map<String, dynamic>
               : <String, dynamic>{};
 
+      if (registerData.isEmpty) {
+        _addLog("Device registration failed: empty data");
+        _showSnackBar("Device registration failed");
+        return;
+      }
+
       final registeredDevice = DeviceRegistrationResponse.fromJson(registerData);
+
+      if (registeredDevice.terminalId.trim().isEmpty ||
+          registeredDevice.enterpriseCode.trim().isEmpty ||
+          registeredDevice.deviceIdentifier.trim().isEmpty) {
+        _addLog("Device registration failed: invalid response data");
+        _showSnackBar("Device registration failed");
+        return;
+      }
 
       final session = DeviceSession(
         enterpriseCode: registeredDevice.enterpriseCode,
@@ -277,6 +358,10 @@ class _HomeScreenState extends State<HomeScreen> {
       selectedRole = "OWNER";
       enterpriseCodeController.clear();
       deviceNameController.clear();
+      currentQrBase64 = "";
+      currentQrPaymentId = "";
+      currentQrTransactionRef = "";
+      currentQrStatus = "";
     });
 
     _addLog("Local device session cleared");
@@ -345,7 +430,9 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
-              initialValue: selectedRole,
+              value: (selectedRole == "OWNER" || selectedRole == "CASHIER")
+                  ? selectedRole
+                  : null,
               decoration: const InputDecoration(
                 labelText: "Role",
                 border: OutlineInputBorder(),
@@ -459,6 +546,59 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget _buildQrCard() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            Row(
+              children: const [
+                Icon(Icons.qr_code),
+                SizedBox(width: 10),
+                Text(
+                  "QR Display",
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.grey.shade300),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Column(
+                children: [
+                  if (currentQrBase64.isNotEmpty)
+                    Image.memory(
+                      base64Decode(currentQrBase64),
+                      width: 220,
+                      height: 220,
+                    )
+                  else
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 40),
+                      child: Text("No QR received yet"),
+                    ),
+                  const SizedBox(height: 16),
+                  _buildInfoRow("Payment ID", currentQrPaymentId),
+                  _buildInfoRow("Transaction Ref", currentQrTransactionRef),
+                  _buildInfoRow("Status", currentQrStatus),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildInfoRow(String label, String value) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
@@ -480,23 +620,25 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildLogsSection() {
-    return Expanded(
-      child: logs.isEmpty
-          ? const Center(
-              child: Text("No logs yet"),
-            )
-          : ListView.builder(
-              itemCount: logs.length,
-              itemBuilder: (context, index) {
-                return Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Text(logs[index]),
-                  ),
-                );
-              },
-            ),
+  Widget _buildLogsList() {
+    if (logs.isEmpty) {
+      return const Card(
+        child: Padding(
+          padding: EdgeInsets.all(16),
+          child: Text("No logs yet"),
+        ),
+      );
+    }
+
+    return Column(
+      children: logs.map((log) {
+        return Card(
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Text(log),
+          ),
+        );
+      }).toList(),
     );
   }
 
@@ -522,32 +664,37 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         title: const Text("Pay Alert Bridge"),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            const Text(
-              "This device registers under an enterprise as OWNER or CASHIER, listens for payment notifications, and communicates with backend using enterprise/device registration and terminal-based WebSocket routing.",
-              style: TextStyle(fontSize: 16),
-            ),
-            const SizedBox(height: 16),
-            _buildRegistrationCard(),
-            const SizedBox(height: 16),
-            _buildSessionCard(),
-            const SizedBox(height: 20),
-            const Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                "Logs",
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                "This device registers under an enterprise as OWNER or CASHIER, receives QR over terminal-based WebSocket routing, listens for payment notifications, and sends notification data to backend.",
+                style: TextStyle(fontSize: 16),
+              ),
+              const SizedBox(height: 16),
+              _buildRegistrationCard(),
+              const SizedBox(height: 16),
+              _buildSessionCard(),
+              const SizedBox(height: 16),
+              _buildQrCard(),
+              const SizedBox(height: 20),
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  "Logs",
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 8),
-            _buildLogsSection(),
-          ],
+              const SizedBox(height: 8),
+              _buildLogsList(),
+            ],
+          ),
         ),
       ),
     );
