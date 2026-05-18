@@ -1,303 +1,170 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
-import '../models/device_session.dart';
-import '../models/payment_notification.dart';
-import '../services/notification_handler.dart';
-import '../services/session_service.dart';
-import '../services/websocket_service.dart';
+import 'models/device_session.dart';
+import 'pages/login_page.dart';
+import 'pages/qr_display_page.dart';
+import 'pages/registration_page.dart';
+import 'services/session_service.dart';
 
-class QrDisplayPage extends StatefulWidget {
-  final DeviceSession session;
-  final VoidCallback onClearSession;
+void main() {
+  WidgetsFlutterBinding.ensureInitialized();
 
-  const QrDisplayPage({
-    super.key,
-    required this.session,
-    required this.onClearSession,
-  });
+  FlutterError.onError = (FlutterErrorDetails details) {
+    FlutterError.presentError(details);
+    debugPrint("Flutter UI Error: ${details.exception}");
+    debugPrint(details.stack.toString());
+  };
 
-  @override
-  State<QrDisplayPage> createState() => _QrDisplayPageState();
+  runApp(const MyApp());
 }
 
-class _QrDisplayPageState extends State<QrDisplayPage> {
-  static const MethodChannel _channel =
-      MethodChannel('payment_notification_channel');
+enum AppPage {
+  loading,
+  login,
+  registration,
+  qrPayment,
+}
 
-  final List<String> logs = [];
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
 
-  String currentQrBase64 = "";
-  String currentQrPaymentId = "";
-  String currentQrTransactionRef = "";
-  String currentQrStatus = "";
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Pay Alert Bridge',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        useMaterial3: true,
+        colorSchemeSeed: Colors.blue,
+      ),
+      home: const AppStartPage(),
+    );
+  }
+}
+
+class AppStartPage extends StatefulWidget {
+  const AppStartPage({super.key});
+
+  @override
+  State<AppStartPage> createState() => _AppStartPageState();
+}
+
+class _AppStartPageState extends State<AppStartPage> {
+  AppPage currentPage = AppPage.loading;
+  DeviceSession? session;
+  String errorMessage = "";
 
   @override
   void initState() {
     super.initState();
-    _setupNotificationChannel();
-    _connectWebSocket();
 
-    _addLog(
-      "Loaded device: ${widget.session.enterpriseCode} | "
-      "${widget.session.role} | ${widget.session.terminalId}",
-    );
-  }
-
-  void _connectWebSocket() {
-    WebSocketService.connect(
-      terminalId: widget.session.terminalId,
-      onTerminalEvent: (data) {
-        final status = (data["status"] ?? "").toString();
-        final paymentId = (data["paymentId"] ?? "").toString();
-        final transactionRef = (data["transactionRef"] ?? "").toString();
-        final message = (data["message"] ?? "").toString();
-        final qrImageBase64 = (data["qrImageBase64"] ?? "").toString();
-
-        if (!mounted) return;
-
-        setState(() {
-          if (qrImageBase64.isNotEmpty) {
-            currentQrBase64 = qrImageBase64;
-            currentQrPaymentId = paymentId;
-            currentQrTransactionRef = transactionRef;
-            currentQrStatus = status;
-          } else if (paymentId.isNotEmpty &&
-              paymentId == currentQrPaymentId &&
-              status.isNotEmpty) {
-            currentQrStatus = status;
-          }
-        });
-
-        _addLog(
-          "Terminal event | paymentId=$paymentId | "
-          "status=$status | txnRef=$transactionRef | message=$message",
-        );
-      },
-      onConnectionLog: (message) {
-        _addLog(message);
-      },
-    );
-  }
-
-  void _setupNotificationChannel() {
-    _channel.setMethodCallHandler((call) async {
-      if (call.method == "onNotificationReceived") {
-        try {
-          final data = Map<dynamic, dynamic>.from(call.arguments);
-          final notification = PaymentNotification.fromMap(data);
-
-          _addLog(
-            "Notification captured: ${notification.packageName} | ${notification.title}",
-          );
-
-          final result = await NotificationHandler.processNotification(
-            notification,
-            widget.session,
-          );
-
-          _addLog(
-            "Notification processed | "
-            "sent=${result["sent"]} | "
-            "status=${result["status"]} | "
-            "txnRef=${result["transactionRef"] ?? ""} | "
-            "paymentId=${result["paymentId"] ?? ""} | "
-            "message=${result["message"] ?? ""}",
-          );
-        } catch (e) {
-          _addLog("Notification handling error: $e");
-        }
-      }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadSession();
     });
   }
 
-  Future<void> _openNotificationAccessSettings() async {
+  Future<void> _loadSession() async {
     try {
-      await _channel.invokeMethod("openNotificationAccessSettings");
-      _addLog("Opened notification access settings");
+      final savedSession = await SessionService.getSession();
+
+      if (!mounted) return;
+
+      setState(() {
+        session = savedSession;
+
+        if (savedSession == null) {
+          currentPage = AppPage.login;
+        } else {
+          currentPage = AppPage.qrPayment;
+        }
+      });
     } catch (e) {
-      _addLog("Failed to open settings: $e");
+      debugPrint("Session load error: $e");
+
+      if (!mounted) return;
+
+      setState(() {
+        session = null;
+        errorMessage = e.toString();
+        currentPage = AppPage.login;
+      });
     }
   }
 
-  Future<void> _logout() async {
-    await SessionService.clearSession();
-    WebSocketService.disconnect();
-
-    if (!mounted) return;
-
-    widget.onClearSession();
-  }
-
-  void _addLog(String message) {
-    if (!mounted) return;
+  void _onLoginSuccess(DeviceSession newSession) {
     setState(() {
-      logs.insert(0, "[${DateTime.now()}] $message");
+      session = newSession;
+      currentPage = AppPage.qrPayment;
     });
   }
 
-  Widget _buildDeviceCard() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            Row(
-              children: const [
-                Icon(Icons.phone_android),
-                SizedBox(width: 10),
-                Text(
-                  "Logged In Device",
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            _buildInfoRow("Enterprise", widget.session.enterpriseCode),
-            _buildInfoRow("Enterprise Name", widget.session.enterpriseName),
-            _buildInfoRow("Role", widget.session.role),
-            _buildInfoRow("Terminal ID", widget.session.terminalId),
-            _buildInfoRow("Device Name", widget.session.deviceName),
-            _buildInfoRow("Device ID", widget.session.deviceIdentifier),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: _openNotificationAccessSettings,
-              child: const Text("Enable Notification Access"),
-            ),
-            const SizedBox(height: 8),
-            OutlinedButton(
-              onPressed: _logout,
-              child: const Text("Logout"),
-            ),
-          ],
-        ),
-      ),
-    );
+  void _onRegistered(DeviceSession newSession) {
+    setState(() {
+      session = newSession;
+      currentPage = AppPage.qrPayment;
+    });
   }
 
-  Widget _buildQrCard() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            Row(
-              children: const [
-                Icon(Icons.qr_code),
-                SizedBox(width: 10),
-                Text(
-                  "QR Payment",
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey.shade300),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Column(
-                children: [
-                  if (currentQrBase64.isNotEmpty)
-                    Image.memory(
-                      base64Decode(currentQrBase64),
-                      width: 230,
-                      height: 230,
-                    )
-                  else
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 40),
-                      child: Text("Waiting for QR from web..."),
-                    ),
-                  const SizedBox(height: 16),
-                  _buildInfoRow("Payment ID", currentQrPaymentId),
-                  _buildInfoRow("Transaction Ref", currentQrTransactionRef),
-                  _buildInfoRow("Status", currentQrStatus),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+  void _onClearSession() {
+    setState(() {
+      session = null;
+      currentPage = AppPage.login;
+    });
   }
 
-  Widget _buildInfoRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 130,
-            child: Text(
-              "$label:",
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
-          ),
-          Expanded(child: Text(value.isEmpty ? "-" : value)),
-        ],
-      ),
-    );
+  void _goToRegistration() {
+    setState(() {
+      currentPage = AppPage.registration;
+    });
   }
 
-  Widget _buildLogs() {
-    if (logs.isEmpty) {
-      return const Card(
-        child: Padding(
-          padding: EdgeInsets.all(16),
-          child: Text("No logs yet"),
-        ),
-      );
-    }
-
-    return Column(
-      children: logs.map((log) {
-        return Card(
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Text(log),
-          ),
-        );
-      }).toList(),
-    );
-  }
-
-  @override
-  void dispose() {
-    WebSocketService.disconnect();
-    super.dispose();
+  void _goToLogin() {
+    setState(() {
+      currentPage = AppPage.login;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    final showDeviceCard = currentQrBase64.isEmpty;
+    if (currentPage == AppPage.loading) {
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    if (currentPage == AppPage.login) {
+      return LoginPage(
+        onLoginSuccess: _onLoginSuccess,
+        onGoToRegistration: _goToRegistration,
+      );
+    }
+
+    if (currentPage == AppPage.registration) {
+      return RegistrationPage(
+        onRegistered: _onRegistered,
+        onGoToLogin: _goToLogin,
+      );
+    }
+
+    if (currentPage == AppPage.qrPayment && session != null) {
+      return QrDisplayPage(
+        session: session!,
+        onClearSession: _onClearSession,
+      );
+    }
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text("QR Payment Page"),
+        title: const Text("App Error"),
       ),
-      body: SingleChildScrollView(
+      body: Padding(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            if (showDeviceCard) _buildDeviceCard(),
-            if (showDeviceCard) const SizedBox(height: 16),
-            _buildQrCard(),
-            const SizedBox(height: 20),
-            const Text(
-              "Logs",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            _buildLogs(),
-          ],
+        child: Text(
+          errorMessage.isEmpty
+              ? "Session not found. Please login again."
+              : errorMessage,
         ),
       ),
     );
