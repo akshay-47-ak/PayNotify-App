@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../models/device_registration_request.dart';
+import '../models/device_login_request.dart';
 import '../models/device_registration_response.dart';
 import '../models/device_session.dart';
 import '../models/enterprise_validation_request.dart';
@@ -8,45 +8,37 @@ import '../models/enterprise_validation_response.dart';
 import '../services/api_service.dart';
 import '../services/session_service.dart';
 
-class RegistrationPage extends StatefulWidget {
-  final Function(DeviceSession) onRegistered;
-  final VoidCallback onGoToLogin;
+class LoginPage extends StatefulWidget {
+  final Function(DeviceSession) onLoginSuccess;
+  final VoidCallback onGoToRegistration;
 
-  const RegistrationPage({
+  const LoginPage({
     super.key,
-    required this.onRegistered,
-    required this.onGoToLogin,
+    required this.onLoginSuccess,
+    required this.onGoToRegistration,
   });
 
   @override
-  State<RegistrationPage> createState() => _RegistrationPageState();
+  State<LoginPage> createState() => _LoginPageState();
 }
 
-class _RegistrationPageState extends State<RegistrationPage> {
+class _LoginPageState extends State<LoginPage> {
   final TextEditingController enterpriseCodeController =
       TextEditingController();
-  final TextEditingController deviceNameController = TextEditingController();
 
-  String selectedRole = "OWNER";
-  bool isRegistering = false;
+  bool isLoading = false;
   final List<String> logs = [];
 
-  Future<void> _registerDevice() async {
+  Future<void> _loginDevice() async {
     final enterpriseCode = enterpriseCodeController.text.trim().toUpperCase();
-    final deviceName = deviceNameController.text.trim();
 
     if (enterpriseCode.isEmpty) {
       _showSnackBar("Please enter enterprise code");
       return;
     }
 
-    if (deviceName.isEmpty) {
-      _showSnackBar("Please enter device name");
-      return;
-    }
-
     setState(() {
-      isRegistering = true;
+      isLoading = true;
     });
 
     try {
@@ -83,20 +75,18 @@ class _RegistrationPageState extends State<RegistrationPage> {
         validationResult.enterpriseCode,
       );
 
-      final registerResponse = await ApiService.registerDevice(
-        DeviceRegistrationRequest(
+      final loginResponse = await ApiService.loginDevice(
+        DeviceLoginRequest(
           enterpriseCode: validationResult.enterpriseCode,
-          role: selectedRole,
           deviceIdentifier: deviceIdentifier,
-          deviceName: deviceName,
         ),
       );
 
-      if (registerResponse == null ||
-          registerResponse["success"] != true ||
-          registerResponse["data"] == null) {
+      if (loginResponse == null ||
+          loginResponse["success"] != true ||
+          loginResponse["data"] == null) {
         final msg =
-            (registerResponse?["message"] ?? "Device registration failed")
+            (loginResponse?["message"] ?? "Device is not registered")
                 .toString();
 
         _addLog(msg);
@@ -104,41 +94,34 @@ class _RegistrationPageState extends State<RegistrationPage> {
         return;
       }
 
-      final registerData = registerResponse["data"] as Map<String, dynamic>;
-      final registeredDevice =
-          DeviceRegistrationResponse.fromJson(registerData);
+      final loginData = loginResponse["data"] as Map<String, dynamic>;
+      final device = DeviceRegistrationResponse.fromJson(loginData);
 
       final session = DeviceSession(
-        enterpriseCode: registeredDevice.enterpriseCode,
-        enterpriseName: registeredDevice.enterpriseName,
-        role: registeredDevice.role,
-        terminalId: registeredDevice.terminalId,
-        deviceIdentifier: registeredDevice.deviceIdentifier,
-        deviceName: registeredDevice.deviceName,
+        enterpriseCode: device.enterpriseCode,
+        enterpriseName: device.enterpriseName,
+        role: device.role,
+        terminalId: device.terminalId,
+        deviceIdentifier: device.deviceIdentifier,
+        deviceName: device.deviceName,
       );
 
       await SessionService.saveSession(session);
 
-      if (registeredDevice.status == "ALREADY_REGISTERED") {
-        _addLog("Device already registered. Existing terminal ID loaded.");
-        _showSnackBar("Device already registered. Logged in.");
-      } else {
-        _addLog("Device registered successfully");
-        _showSnackBar("Device registered successfully");
-      }
-
+      _addLog("Login successful");
       _addLog("Terminal ID: ${session.terminalId}");
 
       if (!mounted) return;
 
-      widget.onRegistered(session);
+      _showSnackBar("Login successful");
+      widget.onLoginSuccess(session);
     } catch (e) {
-      _addLog("Registration error: $e");
-      _showSnackBar("Registration failed");
+      _addLog("Login error: $e");
+      _showSnackBar("Login failed");
     } finally {
       if (mounted) {
         setState(() {
-          isRegistering = false;
+          isLoading = false;
         });
       }
     }
@@ -182,24 +165,14 @@ class _RegistrationPageState extends State<RegistrationPage> {
   @override
   void dispose() {
     enterpriseCodeController.dispose();
-    deviceNameController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final dropdownValue =
-        (selectedRole == "OWNER" || selectedRole == "CASHIER")
-            ? selectedRole
-            : null;
-
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Device Registration"),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: isRegistering ? null : widget.onGoToLogin,
-        ),
+        title: const Text("Device Login"),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
@@ -207,7 +180,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const Text(
-              "Register this phone only once. Backend will generate one permanent terminal ID for this device.",
+              "Login with your enterprise code. If this phone is already registered, backend will return the permanent terminal ID.",
               style: TextStyle(fontSize: 16),
             ),
             const SizedBox(height: 16),
@@ -219,7 +192,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
                     const Align(
                       alignment: Alignment.centerLeft,
                       child: Text(
-                        "Register Device",
+                        "Login Device",
                         style: TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
@@ -236,59 +209,20 @@ class _RegistrationPageState extends State<RegistrationPage> {
                         hintText: "Example: AB1234",
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: deviceNameController,
-                      decoration: const InputDecoration(
-                        labelText: "Device Name",
-                        border: OutlineInputBorder(),
-                        hintText: "Example: Owner Phone / Cashier Phone",
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    DropdownButtonFormField<String>(
-                      value: dropdownValue,
-                      decoration: const InputDecoration(
-                        labelText: "Role",
-                        border: OutlineInputBorder(),
-                      ),
-                      items: const [
-                        DropdownMenuItem(
-                          value: "OWNER",
-                          child: Text("OWNER"),
-                        ),
-                        DropdownMenuItem(
-                          value: "CASHIER",
-                          child: Text("CASHIER"),
-                        ),
-                      ],
-                      onChanged: isRegistering
-                          ? null
-                          : (value) {
-                              if (value == null) return;
-                              setState(() {
-                                selectedRole = value;
-                              });
-                            },
-                    ),
                     const SizedBox(height: 16),
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
-                        onPressed: isRegistering ? null : _registerDevice,
-                        child: Text(
-                          isRegistering
-                              ? "Registering..."
-                              : "Validate & Register Device",
-                        ),
+                        onPressed: isLoading ? null : _loginDevice,
+                        child: Text(isLoading ? "Logging in..." : "Login"),
                       ),
                     ),
                     const SizedBox(height: 8),
                     SizedBox(
                       width: double.infinity,
                       child: OutlinedButton(
-                        onPressed: isRegistering ? null : widget.onGoToLogin,
-                        child: const Text("Already Registered? Login"),
+                        onPressed: isLoading ? null : widget.onGoToRegistration,
+                        child: const Text("New Device Registration"),
                       ),
                     ),
                   ],

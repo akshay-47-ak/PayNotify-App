@@ -122,7 +122,7 @@ class _QrDisplayPageState extends State<QrDisplayPage> {
     }
   }
 
-  Future<void> _clearRegistration() async {
+  Future<void> _logout() async {
     await SessionService.clearSession();
     WebSocketService.disconnect();
 
@@ -149,7 +149,7 @@ class _QrDisplayPageState extends State<QrDisplayPage> {
                 Icon(Icons.phone_android),
                 SizedBox(width: 10),
                 Text(
-                  "Registered Device",
+                  "Logged In Device",
                   style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                 ),
               ],
@@ -168,8 +168,8 @@ class _QrDisplayPageState extends State<QrDisplayPage> {
             ),
             const SizedBox(height: 8),
             OutlinedButton(
-              onPressed: _clearRegistration,
-              child: const Text("Clear Registration"),
+              onPressed: _logout,
+              child: const Text("Logout"),
             ),
           ],
         ),
@@ -188,7 +188,7 @@ class _QrDisplayPageState extends State<QrDisplayPage> {
                 Icon(Icons.qr_code),
                 SizedBox(width: 10),
                 Text(
-                  "QR Display",
+                  "QR Payment",
                   style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                 ),
               ],
@@ -280,7 +280,7 @@ class _QrDisplayPageState extends State<QrDisplayPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text("QR Display"),
+        title: const Text("QR Payment Page"),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),

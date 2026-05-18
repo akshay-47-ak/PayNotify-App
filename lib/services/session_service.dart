@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:math';
 import 'package:shared_preferences/shared_preferences.dart';
+
 import '../models/device_session.dart';
 
 class SessionService {
@@ -20,12 +21,21 @@ class SessionService {
       return null;
     }
 
-    final map = jsonDecode(raw) as Map<String, dynamic>;
-    return DeviceSession.fromJson(map);
+    try {
+      final map = jsonDecode(raw) as Map<String, dynamic>;
+      return DeviceSession.fromJson(map);
+    } catch (e) {
+      await prefs.remove(_sessionKey);
+      return null;
+    }
   }
 
   static Future<void> clearSession() async {
     final prefs = await SharedPreferences.getInstance();
+
+    // This clears only login/session.
+    // Do not remove local device identifier,
+    // otherwise backend will treat same phone as new device.
     await prefs.remove(_sessionKey);
   }
 
@@ -39,7 +49,15 @@ class SessionService {
 
     final value =
         "DEVICE-${DateTime.now().millisecondsSinceEpoch}-${Random().nextInt(999999)}";
+
     await prefs.setString(_deviceIdKey, value);
     return value;
+  }
+
+  static Future<String> buildEnterpriseDeviceIdentifier(
+    String enterpriseCode,
+  ) async {
+    final localDeviceId = await getOrCreateLocalDeviceIdentifier();
+    return "${enterpriseCode.trim().toUpperCase()}_$localDeviceId";
   }
 }

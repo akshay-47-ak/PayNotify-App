@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
+import '../models/device_login_request.dart';
 import '../models/device_registration_request.dart';
 import '../models/enterprise_validation_request.dart';
 import '../models/payment_notify_request.dart';
@@ -18,6 +19,12 @@ class ApiService {
     DeviceRegistrationRequest request,
   ) async {
     return _post("/api/device/register", request.toJson());
+  }
+
+  static Future<Map<String, dynamic>?> loginDevice(
+    DeviceLoginRequest request,
+  ) async {
+    return _post("/api/device/login", request.toJson());
   }
 
   static Future<Map<String, dynamic>?> sendPaymentNotification(
@@ -42,13 +49,14 @@ class ApiService {
       print("API $endpoint status: ${response.statusCode}");
       print("API $endpoint body: ${response.body}");
 
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        return jsonDecode(response.body) as Map<String, dynamic>;
+      if (response.body.trim().isEmpty) {
+        return null;
       }
 
       try {
         return jsonDecode(response.body) as Map<String, dynamic>;
-      } catch (_) {
+      } catch (e) {
+        print("API json parse error for $endpoint: $e");
         return null;
       }
     } catch (e) {
