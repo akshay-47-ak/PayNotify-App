@@ -8,7 +8,7 @@ import '../models/enterprise_validation_request.dart';
 import '../models/payment_notify_request.dart';
 
 class ApiService {
-  static const String baseUrl = "http://172.16.2.170:8080";
+  static const String baseUrl = "https://briskly-jawline-grief.ngrok-free.dev";
 
   static Future<Map<String, dynamic>?> validateEnterprise(
     EnterpriseValidationRequest request,

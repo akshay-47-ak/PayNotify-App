@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:stomp_dart_client/stomp_dart_client.dart';
 
 class WebSocketService {
-  static const String wsUrl = "http://172.16.2.170:8080/ws";
+  static const String wsUrl = "https://briskly-jawline-grief.ngrok-free.dev/ws";
 
   static StompClient? _client;
 
