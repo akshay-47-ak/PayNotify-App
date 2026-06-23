@@ -4,7 +4,7 @@
 <uses-permission android:name="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE" />
 
     <application
-        android:label="myfirst_app"
+        android:label="PayNotify"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
 

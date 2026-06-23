@@ -1,4 +1,4 @@
-# myfirst_app
+# PayNotify
 
 A new Flutter project.
 

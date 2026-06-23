@@ -1,4 +1,4 @@
-package com.example.myfirst_app
+package com.acme.paynotify
 
 import android.app.Notification
 import android.os.Bundle

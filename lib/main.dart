@@ -18,12 +18,7 @@ void main() {
   runApp(const MyApp());
 }
 
-enum AppPage {
-  loading,
-  login,
-  registration,
-  qrPayment,
-}
+enum AppPage { loading, login, registration, qrPayment }
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -31,12 +26,9 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Pay Alert Bridge',
+      title: 'PayNotify',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        colorSchemeSeed: Colors.blue,
-      ),
+      theme: ThemeData(useMaterial3: true, colorSchemeSeed: Colors.blue),
       home: const AppStartPage(),
     );
   }
@@ -127,11 +119,7 @@ class _AppStartPageState extends State<AppStartPage> {
   @override
   Widget build(BuildContext context) {
     if (currentPage == AppPage.loading) {
-      return const Scaffold(
-        body: Center(
-          child: CircularProgressIndicator(),
-        ),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     if (currentPage == AppPage.login) {
@@ -149,16 +137,11 @@ class _AppStartPageState extends State<AppStartPage> {
     }
 
     if (currentPage == AppPage.qrPayment && session != null) {
-      return QrDisplayPage(
-        session: session!,
-        onClearSession: _onClearSession,
-      );
+      return QrDisplayPage(session: session!, onClearSession: _onClearSession);
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("App Error"),
-      ),
+      appBar: AppBar(title: const Text("App Error")),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Text(

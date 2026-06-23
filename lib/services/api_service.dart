@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:developer' as developer;
 import 'package:http/http.dart' as http;
 
 import '../models/device_login_request.dart';
@@ -40,14 +41,15 @@ class ApiService {
     try {
       final response = await http.post(
         Uri.parse("$baseUrl$endpoint"),
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: {"Content-Type": "application/json"},
         body: jsonEncode(body),
       );
 
-      print("API $endpoint status: ${response.statusCode}");
-      print("API $endpoint body: ${response.body}");
+      developer.log(
+        "API $endpoint status: ${response.statusCode}",
+        name: "ApiService",
+      );
+      developer.log("API $endpoint body: ${response.body}", name: "ApiService");
 
       if (response.body.trim().isEmpty) {
         return null;
@@ -56,11 +58,15 @@ class ApiService {
       try {
         return jsonDecode(response.body) as Map<String, dynamic>;
       } catch (e) {
-        print("API json parse error for $endpoint: $e");
+        developer.log(
+          "API json parse error for $endpoint",
+          name: "ApiService",
+          error: e,
+        );
         return null;
       }
     } catch (e) {
-      print("API error for $endpoint: $e");
+      developer.log("API error for $endpoint", name: "ApiService", error: e);
       return null;
     }
   }

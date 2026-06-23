@@ -1,4 +1,4 @@
-package com.example.myfirst_app
+package com.acme.paynotify
 
 import android.content.Intent
 import android.provider.Settings
