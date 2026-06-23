@@ -7,6 +7,8 @@ import '../models/enterprise_validation_request.dart';
 import '../models/enterprise_validation_response.dart';
 import '../services/api_service.dart';
 import '../services/session_service.dart';
+import '../ui/app_theme.dart';
+import '../widgets/app_logo.dart';
 
 class RegistrationPage extends StatefulWidget {
   final Function(DeviceSession) onRegistered;
@@ -66,11 +68,11 @@ class _RegistrationPageState extends State<RegistrationPage> {
         return;
       }
 
-      final validationData =
-          validationResponse["data"] as Map<String, dynamic>;
+      final validationData = validationResponse["data"] as Map<String, dynamic>;
 
-      final validationResult =
-          EnterpriseValidationResponse.fromJson(validationData);
+      final validationResult = EnterpriseValidationResponse.fromJson(
+        validationData,
+      );
 
       if (!validationResult.valid) {
         _addLog(validationResult.message);
@@ -80,8 +82,8 @@ class _RegistrationPageState extends State<RegistrationPage> {
 
       final deviceIdentifier =
           await SessionService.buildEnterpriseDeviceIdentifier(
-        validationResult.enterpriseCode,
-      );
+            validationResult.enterpriseCode,
+          );
 
       final registerResponse = await ApiService.registerDevice(
         DeviceRegistrationRequest(
@@ -105,8 +107,9 @@ class _RegistrationPageState extends State<RegistrationPage> {
       }
 
       final registerData = registerResponse["data"] as Map<String, dynamic>;
-      final registeredDevice =
-          DeviceRegistrationResponse.fromJson(registerData);
+      final registeredDevice = DeviceRegistrationResponse.fromJson(
+        registerData,
+      );
 
       final session = DeviceSession(
         enterpriseCode: registeredDevice.enterpriseCode,
@@ -153,17 +156,15 @@ class _RegistrationPageState extends State<RegistrationPage> {
 
   void _showSnackBar(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Widget _buildLogs() {
     if (logs.isEmpty) {
       return const Card(
-        child: Padding(
-          padding: EdgeInsets.all(16),
-          child: Text("No logs yet"),
-        ),
+        child: Padding(padding: EdgeInsets.all(16), child: Text("No logs yet")),
       );
     }
 
@@ -171,8 +172,19 @@ class _RegistrationPageState extends State<RegistrationPage> {
       children: logs.map((log) {
         return Card(
           child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Text(log),
+            padding: const EdgeInsets.all(14),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.info_outline,
+                  size: 20,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(width: 10),
+                Expanded(child: Text(log)),
+              ],
+            ),
           ),
         );
       }).toList(),
@@ -188,10 +200,9 @@ class _RegistrationPageState extends State<RegistrationPage> {
 
   @override
   Widget build(BuildContext context) {
-    final dropdownValue =
-        (selectedRole == "OWNER" || selectedRole == "CASHIER")
-            ? selectedRole
-            : null;
+    final dropdownValue = (selectedRole == "OWNER" || selectedRole == "CASHIER")
+        ? selectedRole
+        : null;
 
     return Scaffold(
       appBar: AppBar(
@@ -201,108 +212,132 @@ class _RegistrationPageState extends State<RegistrationPage> {
           onPressed: isRegistering ? null : widget.onGoToLogin,
         ),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Text(
-              "Register this phone only once. Backend will generate one permanent terminal ID for this device.",
-              style: TextStyle(fontSize: 16),
-            ),
-            const SizedBox(height: 16),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    const Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        "Register Device",
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: AppLayout.pagePadding(context),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(
+                maxWidth: AppLayout.maxContentWidth,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Center(child: AppLogo(size: 72)),
+                  const SizedBox(height: 20),
+                  Text(
+                    "Register Device",
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    "Register this phone once to receive a permanent terminal ID from the backend.",
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppTheme.textSecondary,
+                      height: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(18),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            "Device Details",
+                            style: Theme.of(context).textTheme.titleLarge
+                                ?.copyWith(fontWeight: FontWeight.w800),
+                          ),
+                          const SizedBox(height: 16),
+                          TextField(
+                            controller: enterpriseCodeController,
+                            textCapitalization: TextCapitalization.characters,
+                            decoration: const InputDecoration(
+                              labelText: "Enterprise Code",
+                              hintText: "Example: AB1234",
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: deviceNameController,
+                            decoration: const InputDecoration(
+                              labelText: "Device Name",
+                              hintText: "Example: Owner Phone / Cashier Phone",
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          DropdownButtonFormField<String>(
+                            initialValue: dropdownValue,
+                            decoration: const InputDecoration(
+                              labelText: "Role",
+                            ),
+                            items: const [
+                              DropdownMenuItem(
+                                value: "OWNER",
+                                child: Text("OWNER"),
+                              ),
+                              DropdownMenuItem(
+                                value: "CASHIER",
+                                child: Text("CASHIER"),
+                              ),
+                            ],
+                            onChanged: isRegistering
+                                ? null
+                                : (value) {
+                                    if (value == null) return;
+                                    setState(() {
+                                      selectedRole = value;
+                                    });
+                                  },
+                          ),
+                          const SizedBox(height: 16),
+                          ElevatedButton.icon(
+                            onPressed: isRegistering ? null : _registerDevice,
+                            icon: isRegistering
+                                ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Icon(Icons.verified_user),
+                            label: Text(
+                              isRegistering
+                                  ? "Registering..."
+                                  : "Validate & Register Device",
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          OutlinedButton.icon(
+                            onPressed: isRegistering
+                                ? null
+                                : widget.onGoToLogin,
+                            icon: const Icon(Icons.login),
+                            label: const Text("Already Registered? Login"),
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: enterpriseCodeController,
-                      textCapitalization: TextCapitalization.characters,
-                      decoration: const InputDecoration(
-                        labelText: "Enterprise Code",
-                        border: OutlineInputBorder(),
-                        hintText: "Example: AB1234",
-                      ),
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    "Logs",
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
                     ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: deviceNameController,
-                      decoration: const InputDecoration(
-                        labelText: "Device Name",
-                        border: OutlineInputBorder(),
-                        hintText: "Example: Owner Phone / Cashier Phone",
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    DropdownButtonFormField<String>(
-                      initialValue: dropdownValue,
-                      decoration: const InputDecoration(
-                        labelText: "Role",
-                        border: OutlineInputBorder(),
-                      ),
-                      items: const [
-                        DropdownMenuItem(
-                          value: "OWNER",
-                          child: Text("OWNER"),
-                        ),
-                        DropdownMenuItem(
-                          value: "CASHIER",
-                          child: Text("CASHIER"),
-                        ),
-                      ],
-                      onChanged: isRegistering
-                          ? null
-                          : (value) {
-                              if (value == null) return;
-                              setState(() {
-                                selectedRole = value;
-                              });
-                            },
-                    ),
-                    const SizedBox(height: 16),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: isRegistering ? null : _registerDevice,
-                        child: Text(
-                          isRegistering
-                              ? "Registering..."
-                              : "Validate & Register Device",
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton(
-                        onPressed: isRegistering ? null : widget.onGoToLogin,
-                        child: const Text("Already Registered? Login"),
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(height: 8),
+                  _buildLogs(),
+                ],
               ),
             ),
-            const SizedBox(height: 20),
-            const Text(
-              "Logs",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            _buildLogs(),
-          ],
+          ),
         ),
       ),
     );

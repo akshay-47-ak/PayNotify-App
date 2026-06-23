@@ -8,6 +8,7 @@ import '../models/payment_notification.dart';
 import '../services/notification_handler.dart';
 import '../services/session_service.dart';
 import '../services/websocket_service.dart';
+import '../ui/app_theme.dart';
 
 class QrDisplayPage extends StatefulWidget {
   final DeviceSession session;
@@ -24,8 +25,9 @@ class QrDisplayPage extends StatefulWidget {
 }
 
 class _QrDisplayPageState extends State<QrDisplayPage> {
-  static const MethodChannel _channel =
-      MethodChannel('payment_notification_channel');
+  static const MethodChannel _channel = MethodChannel(
+    'payment_notification_channel',
+  );
 
   final List<String> logs = [];
 
@@ -131,6 +133,13 @@ class _QrDisplayPageState extends State<QrDisplayPage> {
     widget.onClearSession();
   }
 
+  void _openNotificationLog() {
+    Navigator.of(context).pushNamed(
+      "/notification-log",
+      arguments: List<String>.unmodifiable(logs),
+    );
+  }
+
   void _addLog(String message) {
     if (!mounted) return;
     setState(() {
@@ -141,16 +150,22 @@ class _QrDisplayPageState extends State<QrDisplayPage> {
   Widget _buildDeviceCard() {
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(18),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Row(
-              children: const [
-                Icon(Icons.phone_android),
-                SizedBox(width: 10),
+              children: [
+                Icon(
+                  Icons.phone_android,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(width: 10),
                 Text(
                   "Logged In Device",
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
                 ),
               ],
             ),
@@ -162,14 +177,16 @@ class _QrDisplayPageState extends State<QrDisplayPage> {
             _buildInfoRow("Device Name", widget.session.deviceName),
             _buildInfoRow("Device ID", widget.session.deviceIdentifier),
             const SizedBox(height: 16),
-            ElevatedButton(
+            ElevatedButton.icon(
               onPressed: _openNotificationAccessSettings,
-              child: const Text("Enable Notification Access"),
+              icon: const Icon(Icons.notifications_active),
+              label: const Text("Enable Notification Access"),
             ),
             const SizedBox(height: 8),
-            OutlinedButton(
+            OutlinedButton.icon(
               onPressed: _logout,
-              child: const Text("Logout"),
+              icon: const Icon(Icons.logout),
+              label: const Text("Logout"),
             ),
           ],
         ),
@@ -180,16 +197,22 @@ class _QrDisplayPageState extends State<QrDisplayPage> {
   Widget _buildQrCard() {
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(18),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Row(
-              children: const [
-                Icon(Icons.qr_code),
-                SizedBox(width: 10),
+              children: [
+                Icon(
+                  Icons.qr_code,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(width: 10),
                 Text(
                   "QR Payment",
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
                 ),
               ],
             ),
@@ -199,7 +222,8 @@ class _QrDisplayPageState extends State<QrDisplayPage> {
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 border: Border.all(color: Colors.grey.shade300),
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(8),
+                color: Colors.white,
               ),
               child: Column(
                 children: [
@@ -237,34 +261,17 @@ class _QrDisplayPageState extends State<QrDisplayPage> {
             width: 130,
             child: Text(
               "$label:",
-              style: const TextStyle(fontWeight: FontWeight.w600),
+              style: const TextStyle(fontWeight: FontWeight.w700),
             ),
           ),
-          Expanded(child: Text(value.isEmpty ? "-" : value)),
+          Expanded(
+            child: Text(
+              value.isEmpty ? "-" : value,
+              style: const TextStyle(color: AppTheme.textSecondary),
+            ),
+          ),
         ],
       ),
-    );
-  }
-
-  Widget _buildLogs() {
-    if (logs.isEmpty) {
-      return const Card(
-        child: Padding(
-          padding: EdgeInsets.all(16),
-          child: Text("No logs yet"),
-        ),
-      );
-    }
-
-    return Column(
-      children: logs.map((log) {
-        return Card(
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Text(log),
-          ),
-        );
-      }).toList(),
     );
   }
 
@@ -281,23 +288,38 @@ class _QrDisplayPageState extends State<QrDisplayPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text("QR Payment Page"),
+        actions: [
+          IconButton(
+            tooltip: "Notification Log",
+            onPressed: _openNotificationLog,
+            icon: const Icon(Icons.receipt_long),
+          ),
+        ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            if (showDeviceCard) _buildDeviceCard(),
-            if (showDeviceCard) const SizedBox(height: 16),
-            _buildQrCard(),
-            const SizedBox(height: 20),
-            const Text(
-              "Logs",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: AppLayout.pagePadding(context),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(
+                maxWidth: AppLayout.maxContentWidth,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (showDeviceCard) _buildDeviceCard(),
+                  if (showDeviceCard) const SizedBox(height: 16),
+                  _buildQrCard(),
+                  const SizedBox(height: 16),
+                  OutlinedButton.icon(
+                    onPressed: _openNotificationLog,
+                    icon: const Icon(Icons.receipt_long),
+                    label: const Text("View Notification Log"),
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(height: 8),
-            _buildLogs(),
-          ],
+          ),
         ),
       ),
     );

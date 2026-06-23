@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 
 import 'models/device_session.dart';
 import 'pages/login_page.dart';
+import 'pages/notification_log_page.dart';
 import 'pages/qr_display_page.dart';
 import 'pages/registration_page.dart';
+import 'pages/splash_page.dart';
 import 'services/session_service.dart';
+import 'ui/app_theme.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -18,32 +21,26 @@ void main() {
   runApp(const MyApp());
 }
 
-enum AppPage { loading, login, registration, qrPayment }
+class AppRoutes {
+  static const String splash = "/";
+  static const String login = "/login";
+  static const String register = "/register";
+  static const String qrDisplay = "/qr-display";
+  static const String notificationLog = "/notification-log";
+}
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'PayNotify',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(useMaterial3: true, colorSchemeSeed: Colors.blue),
-      home: const AppStartPage(),
-    );
-  }
+  State<MyApp> createState() => _MyAppState();
 }
 
-class AppStartPage extends StatefulWidget {
-  const AppStartPage({super.key});
+class _MyAppState extends State<MyApp> {
+  final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
 
-  @override
-  State<AppStartPage> createState() => _AppStartPageState();
-}
-
-class _AppStartPageState extends State<AppStartPage> {
-  AppPage currentPage = AppPage.loading;
   DeviceSession? session;
+  bool isSessionLoading = true;
   String errorMessage = "";
 
   @override
@@ -63,12 +60,7 @@ class _AppStartPageState extends State<AppStartPage> {
 
       setState(() {
         session = savedSession;
-
-        if (savedSession == null) {
-          currentPage = AppPage.login;
-        } else {
-          currentPage = AppPage.qrPayment;
-        }
+        isSessionLoading = false;
       });
     } catch (e) {
       debugPrint("Session load error: $e");
@@ -78,7 +70,7 @@ class _AppStartPageState extends State<AppStartPage> {
       setState(() {
         session = null;
         errorMessage = e.toString();
-        currentPage = AppPage.login;
+        isSessionLoading = false;
       });
     }
   }
@@ -86,68 +78,122 @@ class _AppStartPageState extends State<AppStartPage> {
   void _onLoginSuccess(DeviceSession newSession) {
     setState(() {
       session = newSession;
-      currentPage = AppPage.qrPayment;
     });
+
+    _navigatorKey.currentState?.pushNamedAndRemoveUntil(
+      AppRoutes.qrDisplay,
+      (route) => false,
+    );
   }
 
   void _onRegistered(DeviceSession newSession) {
     setState(() {
       session = newSession;
-      currentPage = AppPage.qrPayment;
     });
+
+    _navigatorKey.currentState?.pushNamedAndRemoveUntil(
+      AppRoutes.qrDisplay,
+      (route) => false,
+    );
   }
 
   void _onClearSession() {
     setState(() {
       session = null;
-      currentPage = AppPage.login;
     });
+
+    _navigatorKey.currentState?.pushNamedAndRemoveUntil(
+      AppRoutes.login,
+      (route) => false,
+    );
   }
 
   void _goToRegistration() {
-    setState(() {
-      currentPage = AppPage.registration;
-    });
+    _navigatorKey.currentState?.pushNamed(AppRoutes.register);
   }
 
   void _goToLogin() {
-    setState(() {
-      currentPage = AppPage.login;
-    });
+    _navigatorKey.currentState?.pushNamed(AppRoutes.login);
   }
 
   @override
   Widget build(BuildContext context) {
-    if (currentPage == AppPage.loading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
+    return MaterialApp(
+      navigatorKey: _navigatorKey,
+      title: 'PayNotify',
+      debugShowCheckedModeBanner: false,
+      theme: AppTheme.theme,
+      initialRoute: AppRoutes.splash,
+      routes: {
+        AppRoutes.splash: (context) => SplashPage(
+          isLoading: isSessionLoading,
+          onLogin: () => Navigator.of(context).pushNamed(AppRoutes.login),
+          onRegister: () => Navigator.of(context).pushNamed(AppRoutes.register),
+        ),
+        AppRoutes.login: (context) => LoginPage(
+          onLoginSuccess: _onLoginSuccess,
+          onGoToRegistration: _goToRegistration,
+        ),
+        AppRoutes.register: (context) => RegistrationPage(
+          onRegistered: _onRegistered,
+          onGoToLogin: _goToLogin,
+        ),
+        AppRoutes.qrDisplay: (context) {
+          final activeSession = session;
 
-    if (currentPage == AppPage.login) {
-      return LoginPage(
-        onLoginSuccess: _onLoginSuccess,
-        onGoToRegistration: _goToRegistration,
-      );
-    }
+          if (isSessionLoading) {
+            return const Scaffold(
+              body: Center(child: CircularProgressIndicator()),
+            );
+          }
 
-    if (currentPage == AppPage.registration) {
-      return RegistrationPage(
-        onRegistered: _onRegistered,
-        onGoToLogin: _goToLogin,
-      );
-    }
+          if (activeSession == null) {
+            return _SessionRequiredPage(errorMessage: errorMessage);
+          }
 
-    if (currentPage == AppPage.qrPayment && session != null) {
-      return QrDisplayPage(session: session!, onClearSession: _onClearSession);
-    }
+          return QrDisplayPage(
+            session: activeSession,
+            onClearSession: _onClearSession,
+          );
+        },
+        AppRoutes.notificationLog: (context) {
+          final args = ModalRoute.of(context)?.settings.arguments;
+          final logs = args is List<String> ? args : <String>[];
 
+          return NotificationLogPage(logs: logs);
+        },
+      },
+    );
+  }
+}
+
+class _SessionRequiredPage extends StatelessWidget {
+  final String errorMessage;
+
+  const _SessionRequiredPage({required this.errorMessage});
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("App Error")),
+      appBar: AppBar(title: const Text("Session Required")),
       body: Padding(
         padding: const EdgeInsets.all(16),
-        child: Text(
-          errorMessage.isEmpty
-              ? "Session not found. Please login again."
-              : errorMessage,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              errorMessage.isEmpty
+                  ? "Session not found. Please login again."
+                  : errorMessage,
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () => Navigator.of(
+                context,
+              ).pushNamedAndRemoveUntil(AppRoutes.login, (route) => false),
+              child: const Text("Go to Login"),
+            ),
+          ],
         ),
       ),
     );
