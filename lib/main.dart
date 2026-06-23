@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import 'models/device_session.dart';
 import 'pages/login_page.dart';
+import 'pages/main_screen.dart';
 import 'pages/notification_log_page.dart';
+import 'pages/profile_page.dart';
 import 'pages/qr_display_page.dart';
 import 'pages/registration_page.dart';
 import 'pages/splash_page.dart';
@@ -25,7 +27,9 @@ class AppRoutes {
   static const String splash = "/";
   static const String login = "/login";
   static const String register = "/register";
+  static const String main = "/main";
   static const String qrDisplay = "/qr-display";
+  static const String profile = "/profile";
   static const String notificationLog = "/notification-log";
 }
 
@@ -81,7 +85,7 @@ class _MyAppState extends State<MyApp> {
     });
 
     _navigatorKey.currentState?.pushNamedAndRemoveUntil(
-      AppRoutes.qrDisplay,
+      AppRoutes.main,
       (route) => false,
     );
   }
@@ -92,7 +96,7 @@ class _MyAppState extends State<MyApp> {
     });
 
     _navigatorKey.currentState?.pushNamedAndRemoveUntil(
-      AppRoutes.qrDisplay,
+      AppRoutes.main,
       (route) => false,
     );
   }
@@ -114,6 +118,21 @@ class _MyAppState extends State<MyApp> {
 
   void _goToLogin() {
     _navigatorKey.currentState?.pushNamed(AppRoutes.login);
+  }
+
+  void _goToMain() {
+    _navigatorKey.currentState?.pushNamedAndRemoveUntil(
+      AppRoutes.main,
+      (route) => false,
+    );
+  }
+
+  void _openQrDisplay() {
+    _navigatorKey.currentState?.pushNamed(AppRoutes.qrDisplay);
+  }
+
+  void _openProfile() {
+    _navigatorKey.currentState?.pushNamed(AppRoutes.profile);
   }
 
   @override
@@ -138,6 +157,26 @@ class _MyAppState extends State<MyApp> {
           onRegistered: _onRegistered,
           onGoToLogin: _goToLogin,
         ),
+        AppRoutes.main: (context) {
+          final activeSession = session;
+
+          if (isSessionLoading) {
+            return const Scaffold(
+              body: Center(child: CircularProgressIndicator()),
+            );
+          }
+
+          if (activeSession == null) {
+            return _SessionRequiredPage(errorMessage: errorMessage);
+          }
+
+          return MainScreen(
+            session: activeSession,
+            onOpenQr: _openQrDisplay,
+            onOpenProfile: _openProfile,
+            onLogout: _onClearSession,
+          );
+        },
         AppRoutes.qrDisplay: (context) {
           final activeSession = session;
 
@@ -154,7 +193,24 @@ class _MyAppState extends State<MyApp> {
           return QrDisplayPage(
             session: activeSession,
             onClearSession: _onClearSession,
+            onGoToMain: _goToMain,
+            onOpenProfile: _openProfile,
           );
+        },
+        AppRoutes.profile: (context) {
+          final activeSession = session;
+
+          if (isSessionLoading) {
+            return const Scaffold(
+              body: Center(child: CircularProgressIndicator()),
+            );
+          }
+
+          if (activeSession == null) {
+            return _SessionRequiredPage(errorMessage: errorMessage);
+          }
+
+          return ProfilePage(session: activeSession);
         },
         AppRoutes.notificationLog: (context) {
           final args = ModalRoute.of(context)?.settings.arguments;

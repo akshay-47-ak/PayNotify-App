@@ -13,11 +13,15 @@ import '../ui/app_theme.dart';
 class QrDisplayPage extends StatefulWidget {
   final DeviceSession session;
   final VoidCallback onClearSession;
+  final VoidCallback onGoToMain;
+  final VoidCallback onOpenProfile;
 
   const QrDisplayPage({
     super.key,
     required this.session,
     required this.onClearSession,
+    required this.onGoToMain,
+    required this.onOpenProfile,
   });
 
   @override
@@ -290,9 +294,19 @@ class _QrDisplayPageState extends State<QrDisplayPage> {
         title: const Text("QR Payment Page"),
         actions: [
           IconButton(
+            tooltip: "Profile",
+            onPressed: widget.onOpenProfile,
+            icon: const Icon(Icons.account_circle),
+          ),
+          IconButton(
             tooltip: "Notification Log",
             onPressed: _openNotificationLog,
             icon: const Icon(Icons.receipt_long),
+          ),
+          IconButton(
+            tooltip: "Back to Main",
+            onPressed: widget.onGoToMain,
+            icon: const Icon(Icons.arrow_forward),
           ),
         ],
       ),
