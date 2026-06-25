@@ -1,16 +1,10 @@
 class DeviceLoginRequest {
-  final String enterpriseCode;
-  final String deviceIdentifier;
+  final String deviceName;
+  final String password;
 
-  DeviceLoginRequest({
-    required this.enterpriseCode,
-    required this.deviceIdentifier,
-  });
+  DeviceLoginRequest({required this.deviceName, required this.password});
 
   Map<String, dynamic> toJson() {
-    return {
-      "enterpriseCode": enterpriseCode,
-      "deviceIdentifier": deviceIdentifier,
-    };
+    return {"deviceName": deviceName, "password": password};
   }
 }

@@ -28,14 +28,17 @@ class _RegistrationPageState extends State<RegistrationPage> {
   final TextEditingController enterpriseCodeController =
       TextEditingController();
   final TextEditingController deviceNameController = TextEditingController();
+  final TextEditingController passwordController = TextEditingController();
 
   String selectedRole = "OWNER";
   bool isRegistering = false;
+  bool obscurePassword = true;
   final List<String> logs = [];
 
   Future<void> _registerDevice() async {
     final enterpriseCode = enterpriseCodeController.text.trim().toUpperCase();
     final deviceName = deviceNameController.text.trim();
+    final password = passwordController.text;
 
     if (enterpriseCode.isEmpty) {
       _showSnackBar("Please enter enterprise code");
@@ -44,6 +47,11 @@ class _RegistrationPageState extends State<RegistrationPage> {
 
     if (deviceName.isEmpty) {
       _showSnackBar("Please enter device name");
+      return;
+    }
+
+    if (password.trim().isEmpty) {
+      _showSnackBar("Please enter device password");
       return;
     }
 
@@ -91,6 +99,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
           role: selectedRole,
           deviceIdentifier: deviceIdentifier,
           deviceName: deviceName,
+          password: password,
         ),
       );
 
@@ -195,6 +204,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
   void dispose() {
     enterpriseCodeController.dispose();
     deviceNameController.dispose();
+    passwordController.dispose();
     super.dispose();
   }
 
@@ -268,6 +278,32 @@ class _RegistrationPageState extends State<RegistrationPage> {
                             decoration: const InputDecoration(
                               labelText: "Device Name",
                               hintText: "Example: Owner Phone / Cashier Phone",
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: passwordController,
+                            obscureText: obscurePassword,
+                            decoration: InputDecoration(
+                              labelText: "Device Password",
+                              hintText: "Set a password for device login",
+                              suffixIcon: IconButton(
+                                tooltip: obscurePassword
+                                    ? "Show password"
+                                    : "Hide password",
+                                onPressed: isRegistering
+                                    ? null
+                                    : () {
+                                        setState(() {
+                                          obscurePassword = !obscurePassword;
+                                        });
+                                      },
+                                icon: Icon(
+                                  obscurePassword
+                                      ? Icons.visibility
+                                      : Icons.visibility_off,
+                                ),
+                              ),
                             ),
                           ),
                           const SizedBox(height: 12),

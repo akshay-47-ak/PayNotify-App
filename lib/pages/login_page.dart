@@ -3,8 +3,6 @@ import 'package:flutter/material.dart';
 import '../models/device_login_request.dart';
 import '../models/device_registration_response.dart';
 import '../models/device_session.dart';
-import '../models/enterprise_validation_request.dart';
-import '../models/enterprise_validation_response.dart';
 import '../services/api_service.dart';
 import '../services/session_service.dart';
 import '../ui/app_theme.dart';
@@ -25,17 +23,24 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  final TextEditingController enterpriseCodeController =
-      TextEditingController();
+  final TextEditingController deviceNameController = TextEditingController();
+  final TextEditingController passwordController = TextEditingController();
 
   bool isLoading = false;
+  bool obscurePassword = true;
   final List<String> logs = [];
 
   Future<void> _loginDevice() async {
-    final enterpriseCode = enterpriseCodeController.text.trim().toUpperCase();
+    final deviceName = deviceNameController.text.trim();
+    final password = passwordController.text;
 
-    if (enterpriseCode.isEmpty) {
-      _showSnackBar("Please enter enterprise code");
+    if (deviceName.isEmpty) {
+      _showSnackBar("Please enter device name");
+      return;
+    }
+
+    if (password.trim().isEmpty) {
+      _showSnackBar("Please enter device password");
       return;
     }
 
@@ -44,44 +49,8 @@ class _LoginPageState extends State<LoginPage> {
     });
 
     try {
-      final validationResponse = await ApiService.validateEnterprise(
-        EnterpriseValidationRequest(enterpriseCode: enterpriseCode),
-      );
-
-      if (validationResponse == null ||
-          validationResponse["success"] != true ||
-          validationResponse["data"] == null) {
-        final msg =
-            (validationResponse?["message"] ?? "Enterprise validation failed")
-                .toString();
-
-        _addLog(msg);
-        _showSnackBar(msg);
-        return;
-      }
-
-      final validationData = validationResponse["data"] as Map<String, dynamic>;
-
-      final validationResult = EnterpriseValidationResponse.fromJson(
-        validationData,
-      );
-
-      if (!validationResult.valid) {
-        _addLog(validationResult.message);
-        _showSnackBar(validationResult.message);
-        return;
-      }
-
-      final deviceIdentifier =
-          await SessionService.buildEnterpriseDeviceIdentifier(
-            validationResult.enterpriseCode,
-          );
-
       final loginResponse = await ApiService.loginDevice(
-        DeviceLoginRequest(
-          enterpriseCode: validationResult.enterpriseCode,
-          deviceIdentifier: deviceIdentifier,
-        ),
+        DeviceLoginRequest(deviceName: deviceName, password: password),
       );
 
       if (loginResponse == null ||
@@ -174,7 +143,8 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   void dispose() {
-    enterpriseCodeController.dispose();
+    deviceNameController.dispose();
+    passwordController.dispose();
     super.dispose();
   }
 
@@ -204,7 +174,7 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    "Enter your enterprise code to load the registered terminal for this device.",
+                    "Enter your registered device name and password to load the terminal.",
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: AppTheme.textSecondary,
@@ -225,11 +195,36 @@ class _LoginPageState extends State<LoginPage> {
                           ),
                           const SizedBox(height: 16),
                           TextField(
-                            controller: enterpriseCodeController,
-                            textCapitalization: TextCapitalization.characters,
+                            controller: deviceNameController,
                             decoration: const InputDecoration(
-                              labelText: "Enterprise Code",
-                              hintText: "Example: AB1234",
+                              labelText: "Device Name",
+                              hintText: "Example: Counter 1",
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: passwordController,
+                            obscureText: obscurePassword,
+                            decoration: InputDecoration(
+                              labelText: "Device Password",
+                              hintText: "Enter device password",
+                              suffixIcon: IconButton(
+                                tooltip: obscurePassword
+                                    ? "Show password"
+                                    : "Hide password",
+                                onPressed: isLoading
+                                    ? null
+                                    : () {
+                                        setState(() {
+                                          obscurePassword = !obscurePassword;
+                                        });
+                                      },
+                                icon: Icon(
+                                  obscurePassword
+                                      ? Icons.visibility
+                                      : Icons.visibility_off,
+                                ),
+                              ),
                             ),
                           ),
                           const SizedBox(height: 16),

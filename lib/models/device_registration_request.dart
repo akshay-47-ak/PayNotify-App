@@ -3,12 +3,14 @@ class DeviceRegistrationRequest {
   final String role;
   final String deviceIdentifier;
   final String deviceName;
+  final String password;
 
   DeviceRegistrationRequest({
     required this.enterpriseCode,
     required this.role,
     required this.deviceIdentifier,
     required this.deviceName,
+    required this.password,
   });
 
   Map<String, dynamic> toJson() {
@@ -17,6 +19,7 @@ class DeviceRegistrationRequest {
       "role": role,
       "deviceIdentifier": deviceIdentifier,
       "deviceName": deviceName,
+      "password": password,
     };
   }
 }
