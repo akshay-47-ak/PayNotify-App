@@ -61,6 +61,7 @@ class _QrDisplayPageState extends State<QrDisplayPage> {
         final transactionRef = (data["transactionRef"] ?? "").toString();
         final message = (data["message"] ?? "").toString();
         final qrImageBase64 = (data["qrImageBase64"] ?? "").toString();
+        final eventType = (data["eventType"] ?? "").toString();
 
         if (!mounted) return;
 
@@ -79,7 +80,8 @@ class _QrDisplayPageState extends State<QrDisplayPage> {
 
         _addLog(
           "Terminal event | paymentId=$paymentId | "
-          "status=$status | txnRef=$transactionRef | message=$message",
+          "status=$status | eventType=$eventType | "
+          "txnRef=$transactionRef | message=$message",
         );
       },
       onConnectionLog: (message) {
@@ -103,6 +105,17 @@ class _QrDisplayPageState extends State<QrDisplayPage> {
             notification,
             widget.session,
           );
+          final resultPaymentId = (result["paymentId"] ?? "").toString();
+          final resultStatus = (result["status"] ?? "").toString();
+
+          if (mounted &&
+              resultPaymentId.isNotEmpty &&
+              resultPaymentId == currentQrPaymentId &&
+              resultStatus.isNotEmpty) {
+            setState(() {
+              currentQrStatus = resultStatus;
+            });
+          }
 
           _addLog(
             "Notification processed | "

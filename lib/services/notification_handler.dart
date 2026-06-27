@@ -56,9 +56,13 @@ class NotificationHandler {
       notification.bigText ?? "",
     ].join(" ").toLowerCase();
 
-    final isKnownPaymentApp = paymentPackages.contains(notification.packageName);
+    final isKnownPaymentApp = paymentPackages.contains(
+      notification.packageName,
+    );
     final strongMatch = strongKeywords.any((k) => content.contains(k));
-    final weakMatchCount = weakKeywords.where((k) => content.contains(k)).length;
+    final weakMatchCount = weakKeywords
+        .where((k) => content.contains(k))
+        .length;
 
     if (isKnownPaymentApp && (strongMatch || weakMatchCount >= 2)) {
       return true;
@@ -107,23 +111,78 @@ class NotificationHandler {
     return match?.group(0)?.trim();
   }
 
+  static double? extractAmount(String text) {
+    if (text.trim().isEmpty) {
+      return null;
+    }
+
+    final regex = RegExp(
+      r'(?:rs\.?|inr|₹)\s*([0-9]+(?:,[0-9]{2,3})*(?:\.[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?)|([0-9]+(?:,[0-9]{2,3})*(?:\.[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?)\s*(?:rs\.?|inr|₹)',
+      caseSensitive: false,
+    );
+
+    final match = regex.firstMatch(text);
+    final raw = (match?.group(1) ?? match?.group(2))?.replaceAll(",", "");
+    if (raw == null || raw.trim().isEmpty) {
+      return null;
+    }
+
+    return double.tryParse(raw);
+  }
+
+  static String? extractPayerName(String text) {
+    if (text.trim().isEmpty) {
+      return null;
+    }
+
+    final regexes = [
+      RegExp(
+        r'(?:received from|paid by|from)\s+([A-Za-z][A-Za-z .]{1,60})',
+        caseSensitive: false,
+      ),
+      RegExp(
+        r'([A-Za-z][A-Za-z .]{1,60})\s+(?:paid you|sent you)',
+        caseSensitive: false,
+      ),
+    ];
+
+    for (final regex in regexes) {
+      final match = regex.firstMatch(text);
+      final value = match?.group(1)?.trim();
+      if (value != null && value.isNotEmpty) {
+        return value.replaceAll(RegExp(r'\s+'), " ");
+      }
+    }
+
+    return null;
+  }
+
+  static String appNameForPackage(String packageName) {
+    switch (packageName) {
+      case "com.phonepe.app":
+        return "PhonePe";
+      case "com.google.android.apps.nbu.paisa.user":
+        return "Google Pay";
+      case "net.one97.paytm":
+        return "Paytm";
+      case "in.org.npci.upiapp":
+        return "BHIM";
+      default:
+        return packageName;
+    }
+  }
+
   static Future<Map<String, dynamic>> processNotification(
     PaymentNotification notification,
     DeviceSession? session,
   ) async {
     if (session == null) {
-      return {
-        "sent": false,
-        "status": "DEVICE_NOT_REGISTERED",
-      };
+      return {"sent": false, "status": "DEVICE_NOT_REGISTERED"};
     }
 
     final likely = isLikelyPaymentNotification(notification);
     if (!likely) {
-      return {
-        "sent": false,
-        "status": "FILTERED",
-      };
+      return {"sent": false, "status": "FILTERED"};
     }
 
     final message = _buildMessage(notification);
@@ -133,13 +192,23 @@ class NotificationHandler {
     ].where((e) => e.trim().isNotEmpty).join(" ").trim();
 
     final txnRef = extractTxnRef(fullText);
+    final amount = extractAmount(fullText);
+    final payerName = extractPayerName(fullText);
 
     final request = PaymentNotifyRequest(
       enterpriseCode: session.enterpriseCode,
       deviceIdentifier: session.deviceIdentifier,
+      terminalId: session.terminalId,
+      appName: appNameForPackage(notification.packageName),
       packageName: notification.packageName,
       title: notification.title,
       message: message,
+      rawTitle: notification.title,
+      rawMessage: message,
+      amount: amount,
+      payerName: payerName,
+      extractedTxnId: txnRef,
+      notificationReceivedAt: DateTime.now().millisecondsSinceEpoch,
       transactionRef: txnRef,
     );
 
@@ -176,6 +245,8 @@ class NotificationHandler {
       "paymentId": (data["paymentId"] ?? "").toString(),
       "transactionRef": (data["transactionRef"] ?? txnRef ?? "").toString(),
       "matched": data["matched"],
+      "amount": amount,
+      "payerName": payerName ?? "",
       "message": (data["message"] ?? message).toString(),
     };
   }
