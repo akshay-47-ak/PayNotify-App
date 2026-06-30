@@ -245,8 +245,13 @@ class NotificationHandler {
       "paymentId": (data["paymentId"] ?? "").toString(),
       "transactionRef": (data["transactionRef"] ?? txnRef ?? "").toString(),
       "matched": data["matched"],
+      "notificationId": (data["notificationId"] ?? "").toString(),
+      "expectedAmount": (data["expectedAmount"] ?? "").toString(),
+      "receivedAmount": (data["receivedAmount"] ?? "").toString(),
+      "amountMatched": data["amountMatched"],
+      "utr": (data["utr"] ?? "").toString(),
       "amount": amount,
-      "payerName": payerName ?? "",
+      "payerName": (data["payerName"] ?? payerName ?? "").toString(),
       "message": (data["message"] ?? message).toString(),
     };
   }

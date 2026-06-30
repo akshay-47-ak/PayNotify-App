@@ -32,6 +32,10 @@ class _QrDisplayPageState extends State<QrDisplayPage> {
   static const MethodChannel _channel = MethodChannel(
     'payment_notification_channel',
   );
+  static const String _phonePeConfirmationEvent =
+      "PHONEPE_PAYMENT_CONFIRMATION_REQUIRED";
+  static const String _phonePeWaitingConfirmationStatus =
+      "PHONEPE_MATCHED_WAITING_CONFIRMATION";
 
   final List<String> logs = [];
 
@@ -62,6 +66,10 @@ class _QrDisplayPageState extends State<QrDisplayPage> {
         final message = (data["message"] ?? "").toString();
         final qrImageBase64 = (data["qrImageBase64"] ?? "").toString();
         final eventType = (data["eventType"] ?? "").toString();
+        final shouldUpdateStatus = _shouldApplyTerminalStatus(
+          status: status,
+          eventType: eventType,
+        );
 
         if (!mounted) return;
 
@@ -73,10 +81,17 @@ class _QrDisplayPageState extends State<QrDisplayPage> {
             currentQrStatus = status;
           } else if (paymentId.isNotEmpty &&
               paymentId == currentQrPaymentId &&
-              status.isNotEmpty) {
+              status.isNotEmpty &&
+              shouldUpdateStatus) {
             currentQrStatus = status;
           }
         });
+
+        if (!shouldUpdateStatus) {
+          _addLog(
+            "PhonePe confirmation is pending on cashier web; Android is waiting for final status.",
+          );
+        }
 
         _addLog(
           "Terminal event | paymentId=$paymentId | "
@@ -107,14 +122,24 @@ class _QrDisplayPageState extends State<QrDisplayPage> {
           );
           final resultPaymentId = (result["paymentId"] ?? "").toString();
           final resultStatus = (result["status"] ?? "").toString();
+          final shouldUpdateStatus = _shouldApplyTerminalStatus(
+            status: resultStatus,
+          );
 
           if (mounted &&
               resultPaymentId.isNotEmpty &&
               resultPaymentId == currentQrPaymentId &&
-              resultStatus.isNotEmpty) {
+              resultStatus.isNotEmpty &&
+              shouldUpdateStatus) {
             setState(() {
               currentQrStatus = resultStatus;
             });
+          }
+
+          if (!shouldUpdateStatus) {
+            _addLog(
+              "PhonePe matched. Confirm or reject from the cashier web screen.",
+            );
           }
 
           _addLog(
@@ -123,6 +148,12 @@ class _QrDisplayPageState extends State<QrDisplayPage> {
             "status=${result["status"]} | "
             "txnRef=${result["transactionRef"] ?? ""} | "
             "paymentId=${result["paymentId"] ?? ""} | "
+            "notificationId=${result["notificationId"] ?? ""} | "
+            "utr=${result["utr"] ?? ""} | "
+            "amountMatched=${result["amountMatched"] ?? ""} | "
+            "expectedAmount=${result["expectedAmount"] ?? ""} | "
+            "receivedAmount=${result["receivedAmount"] ?? ""} | "
+            "payerName=${result["payerName"] ?? ""} | "
             "message=${result["message"] ?? ""}",
           );
         } catch (e) {
@@ -162,6 +193,14 @@ class _QrDisplayPageState extends State<QrDisplayPage> {
     setState(() {
       logs.insert(0, "[${DateTime.now()}] $message");
     });
+  }
+
+  bool _shouldApplyTerminalStatus({
+    required String status,
+    String eventType = "",
+  }) {
+    return eventType != _phonePeConfirmationEvent &&
+        status != _phonePeWaitingConfirmationStatus;
   }
 
   Widget _buildDeviceCard() {

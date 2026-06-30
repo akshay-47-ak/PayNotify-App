@@ -77,7 +77,6 @@ class _RegistrationPageState extends State<RegistrationPage> {
       }
 
       final validationData = validationResponse["data"] as Map<String, dynamic>;
-
       final validationResult = EnterpriseValidationResponse.fromJson(
         validationData,
       );
@@ -86,6 +85,15 @@ class _RegistrationPageState extends State<RegistrationPage> {
         _addLog(validationResult.message);
         _showSnackBar(validationResult.message);
         return;
+      }
+
+      if (validationResult.department.isNotEmpty ||
+          validationResult.departmentCode != null) {
+        _addLog(
+          "Enterprise department: "
+          "${validationResult.department.isEmpty ? "-" : validationResult.department}"
+          " (${validationResult.departmentCode?.toString() ?? "-"})",
+        );
       }
 
       final deviceIdentifier =
