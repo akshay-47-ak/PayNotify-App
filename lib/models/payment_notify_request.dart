@@ -11,7 +11,7 @@ class PaymentNotifyRequest {
   final double? amount;
   final String? payerName;
   final String? extractedTxnId;
-  final int notificationReceivedAt;
+  final String notificationReceivedAt;
   final String? transactionRef;
 
   PaymentNotifyRequest({

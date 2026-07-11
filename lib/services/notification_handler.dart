@@ -160,16 +160,22 @@ class NotificationHandler {
   static String appNameForPackage(String packageName) {
     switch (packageName) {
       case "com.phonepe.app":
-        return "PhonePe";
+        return "PHONEPE";
       case "com.google.android.apps.nbu.paisa.user":
-        return "Google Pay";
+        return "GOOGLE_PAY";
       case "net.one97.paytm":
-        return "Paytm";
+        return "PAYTM";
       case "in.org.npci.upiapp":
         return "BHIM";
       default:
         return packageName;
     }
+  }
+
+  static String backendLocalDateTime(DateTime value) {
+    final local = value.toLocal();
+    final iso = local.toIso8601String();
+    return iso.endsWith("Z") ? iso.substring(0, iso.length - 1) : iso;
   }
 
   static Future<Map<String, dynamic>> processNotification(
@@ -208,7 +214,7 @@ class NotificationHandler {
       amount: amount,
       payerName: payerName,
       extractedTxnId: txnRef,
-      notificationReceivedAt: DateTime.now().millisecondsSinceEpoch,
+      notificationReceivedAt: backendLocalDateTime(DateTime.now()),
       transactionRef: txnRef,
     );
 
