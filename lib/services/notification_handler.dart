@@ -158,11 +158,19 @@ class NotificationHandler {
   }
 
   static String appNameForPackage(String packageName) {
-    switch (packageName) {
-      case "com.phonepe.app":
-        return "PHONEPE";
-      case "com.google.android.apps.nbu.paisa.user":
-        return "GOOGLE_PAY";
+    final value = packageName.trim().toLowerCase();
+
+    if (value.contains("phonepe") || value.contains("com.phonepe.app")) {
+      return "PHONEPE";
+    }
+
+    if (value.contains("google pay") ||
+        value.contains("gpay") ||
+        value.contains("com.google.android.apps.nbu.paisa.user")) {
+      return "GOOGLE_PAY";
+    }
+
+    switch (value) {
       case "net.one97.paytm":
         return "PAYTM";
       case "in.org.npci.upiapp":
@@ -170,6 +178,15 @@ class NotificationHandler {
       default:
         return packageName;
     }
+  }
+
+  static DateTime notificationDateTime(PaymentNotification notification) {
+    final timestamp = notification.timestamp;
+    if (timestamp == null || timestamp <= 0) {
+      return DateTime.now();
+    }
+
+    return DateTime.fromMillisecondsSinceEpoch(timestamp);
   }
 
   static String backendLocalDateTime(DateTime value) {
@@ -214,7 +231,9 @@ class NotificationHandler {
       amount: amount,
       payerName: payerName,
       extractedTxnId: txnRef,
-      notificationReceivedAt: backendLocalDateTime(DateTime.now()),
+      notificationReceivedAt: backendLocalDateTime(
+        notificationDateTime(notification),
+      ),
       transactionRef: txnRef,
     );
 

@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pay_notify/models/payment_notify_request.dart';
+import 'package:pay_notify/models/payment_notification.dart';
 import 'package:pay_notify/services/notification_handler.dart';
 
 void main() {
@@ -41,6 +42,33 @@ void main() {
         'com.google.android.apps.nbu.paisa.user',
       ),
       'GOOGLE_PAY',
+    );
+  });
+
+  test('variant package names still map to backend payment app values', () {
+    expect(
+      NotificationHandler.appNameForPackage('com.phonepe.app.business'),
+      'PHONEPE',
+    );
+    expect(
+      NotificationHandler.appNameForPackage('com.example.gpay'),
+      'GOOGLE_PAY',
+    );
+  });
+
+  test('notification post timestamp is used for backend received time', () {
+    final notification = PaymentNotification(
+      packageName: 'com.phonepe.app',
+      title: 'Payment received',
+      text: 'Rahul paid you Rs. 500.00',
+      timestamp: DateTime(2026, 7, 11, 14, 30, 45, 123).millisecondsSinceEpoch,
+    );
+
+    expect(
+      NotificationHandler.backendLocalDateTime(
+        NotificationHandler.notificationDateTime(notification),
+      ),
+      '2026-07-11T14:30:45.123',
     );
   });
 }
