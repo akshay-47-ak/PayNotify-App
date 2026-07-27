@@ -34,6 +34,18 @@ class ApiService {
     return _post("/api/payment/notify", request.toJson());
   }
 
+  static Future<Map<String, dynamic>?> manuallyConfirmPayment({
+    required String paymentId,
+    String? utr,
+    String? payerName,
+    String? reason,
+  }) async {
+    return _post(
+      "/api/payments/${Uri.encodeComponent(paymentId)}/manual-confirm",
+      {"utr": utr, "payerName": payerName, "reason": reason},
+    );
+  }
+
   static Future<Map<String, dynamic>?> _post(
     String endpoint,
     Map<String, dynamic> body,

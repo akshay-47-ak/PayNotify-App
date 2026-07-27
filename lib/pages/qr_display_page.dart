@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../models/device_session.dart';
 import '../models/payment_notification.dart';
+import '../services/api_service.dart';
 import '../services/notification_handler.dart';
 import '../services/session_service.dart';
 import '../services/websocket_service.dart';
@@ -43,6 +44,7 @@ class _QrDisplayPageState extends State<QrDisplayPage> {
   String currentQrPaymentId = "";
   String currentQrTransactionRef = "";
   String currentQrStatus = "";
+  bool isManualConfirming = false;
 
   @override
   void initState() {
@@ -181,6 +183,151 @@ class _QrDisplayPageState extends State<QrDisplayPage> {
     widget.onClearSession();
   }
 
+  Future<void> _manualConfirmPayment() async {
+    if (currentQrPaymentId.isEmpty || isManualConfirming) {
+      return;
+    }
+
+    final form = await _showManualConfirmDialog();
+    if (form == null) {
+      return;
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      isManualConfirming = true;
+    });
+
+    try {
+      final response = await ApiService.manuallyConfirmPayment(
+        paymentId: currentQrPaymentId,
+        utr: form["utr"],
+        payerName: form["payerName"],
+        reason: form["reason"],
+      );
+
+      if (response == null ||
+          response["success"] != true ||
+          response["data"] == null) {
+        final message = (response?["message"] ?? "Manual confirmation failed")
+            .toString();
+        _addLog("Manual confirmation failed: $message");
+        _showSnackBar(message);
+        return;
+      }
+
+      final data = response["data"] as Map<String, dynamic>;
+      final status = (data["status"] ?? "").toString();
+      final paymentId = (data["paymentId"] ?? currentQrPaymentId).toString();
+      final transactionRef = (data["transactionRef"] ?? currentQrTransactionRef)
+          .toString();
+      final message = (data["message"] ?? response["message"] ?? "").toString();
+
+      if (!mounted) return;
+
+      setState(() {
+        if (paymentId.isNotEmpty) {
+          currentQrPaymentId = paymentId;
+        }
+        if (transactionRef.isNotEmpty) {
+          currentQrTransactionRef = transactionRef;
+        }
+        if (status.isNotEmpty) {
+          currentQrStatus = status;
+        }
+      });
+
+      _addLog(
+        "Manual confirmation completed | paymentId=$paymentId | "
+        "status=$status | message=$message",
+      );
+      _showSnackBar(message.isEmpty ? "Payment manually confirmed" : message);
+    } catch (e) {
+      _addLog("Manual confirmation error: $e");
+      _showSnackBar("Manual confirmation failed");
+    } finally {
+      if (mounted) {
+        setState(() {
+          isManualConfirming = false;
+        });
+      }
+    }
+  }
+
+  Future<Map<String, String?>?> _showManualConfirmDialog() {
+    final utrController = TextEditingController();
+    final payerNameController = TextEditingController();
+    final reasonController = TextEditingController(
+      text: "Manual fallback confirmation from Android terminal",
+    );
+
+    return showDialog<Map<String, String?>>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text("Manual Confirmation"),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: utrController,
+                  decoration: const InputDecoration(
+                    labelText: "UTR / Reference",
+                    hintText: "Optional",
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: payerNameController,
+                  decoration: const InputDecoration(
+                    labelText: "Payer Name",
+                    hintText: "Optional",
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: reasonController,
+                  maxLines: 2,
+                  decoration: const InputDecoration(
+                    labelText: "Reason",
+                    hintText: "Optional",
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text("Cancel"),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                String? optionalText(TextEditingController controller) {
+                  final value = controller.text.trim();
+                  return value.isEmpty ? null : value;
+                }
+
+                Navigator.of(context).pop({
+                  "utr": optionalText(utrController),
+                  "payerName": optionalText(payerNameController),
+                  "reason": optionalText(reasonController),
+                });
+              },
+              child: const Text("Confirm"),
+            ),
+          ],
+        );
+      },
+    ).whenComplete(() {
+      utrController.dispose();
+      payerNameController.dispose();
+      reasonController.dispose();
+    });
+  }
+
   void _openNotificationLog() {
     Navigator.of(context).pushNamed(
       "/notification-log",
@@ -195,12 +342,24 @@ class _QrDisplayPageState extends State<QrDisplayPage> {
     });
   }
 
+  void _showSnackBar(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
   bool _shouldApplyTerminalStatus({
     required String status,
     String eventType = "",
   }) {
     return eventType != _phonePeConfirmationEvent &&
         status != _phonePeWaitingConfirmationStatus;
+  }
+
+  bool get _canManualConfirmCurrentPayment {
+    return currentQrPaymentId.isNotEmpty &&
+        (currentQrStatus == "WAITING" || currentQrStatus == "PENDING");
   }
 
   Widget _buildDeviceCard() {
@@ -298,6 +457,22 @@ class _QrDisplayPageState extends State<QrDisplayPage> {
                   _buildInfoRow("Payment ID", currentQrPaymentId),
                   _buildInfoRow("Transaction Ref", currentQrTransactionRef),
                   _buildInfoRow("Status", currentQrStatus),
+                  if (_canManualConfirmCurrentPayment) ...[
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      onPressed: isManualConfirming
+                          ? null
+                          : _manualConfirmPayment,
+                      icon: isManualConfirming
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.verified),
+                      label: const Text("Manual Confirm"),
+                    ),
+                  ],
                 ],
               ),
             ),
