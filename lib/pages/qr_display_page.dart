@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -37,6 +38,7 @@ class _QrDisplayPageState extends State<QrDisplayPage> {
       "PHONEPE_PAYMENT_CONFIRMATION_REQUIRED";
   static const String _phonePeWaitingConfirmationStatus =
       "PHONEPE_MATCHED_WAITING_CONFIRMATION";
+  static const Duration _manualConfirmFallbackWindow = Duration(minutes: 3);
 
   final List<String> logs = [];
 
@@ -44,7 +46,9 @@ class _QrDisplayPageState extends State<QrDisplayPage> {
   String currentQrPaymentId = "";
   String currentQrTransactionRef = "";
   String currentQrStatus = "";
+  DateTime? currentQrGeneratedAt;
   bool isManualConfirming = false;
+  Timer? _manualConfirmRefreshTimer;
 
   @override
   void initState() {
@@ -68,6 +72,7 @@ class _QrDisplayPageState extends State<QrDisplayPage> {
         final message = (data["message"] ?? "").toString();
         final qrImageBase64 = (data["qrImageBase64"] ?? "").toString();
         final eventType = (data["eventType"] ?? "").toString();
+        final eventTimestamp = _parseEventTimestamp(data["timestamp"]);
         final shouldUpdateStatus = _shouldApplyTerminalStatus(
           status: status,
           eventType: eventType,
@@ -81,11 +86,16 @@ class _QrDisplayPageState extends State<QrDisplayPage> {
             currentQrPaymentId = paymentId;
             currentQrTransactionRef = transactionRef;
             currentQrStatus = status;
+            currentQrGeneratedAt = eventTimestamp ?? DateTime.now();
+            _startManualConfirmRefreshTimer();
           } else if (paymentId.isNotEmpty &&
               paymentId == currentQrPaymentId &&
               status.isNotEmpty &&
               shouldUpdateStatus) {
             currentQrStatus = status;
+            if (!_isWaitingStatus(status)) {
+              _stopManualConfirmRefreshTimer();
+            }
           }
         });
 
@@ -359,7 +369,54 @@ class _QrDisplayPageState extends State<QrDisplayPage> {
 
   bool get _canManualConfirmCurrentPayment {
     return currentQrPaymentId.isNotEmpty &&
-        (currentQrStatus == "WAITING" || currentQrStatus == "PENDING");
+        _isWaitingStatus(currentQrStatus) &&
+        _isManualConfirmWindowOpen;
+  }
+
+  bool get _isManualConfirmWindowOpen {
+    final generatedAt = currentQrGeneratedAt;
+    if (generatedAt == null) {
+      return false;
+    }
+
+    return DateTime.now().difference(generatedAt) >=
+        _manualConfirmFallbackWindow;
+  }
+
+  bool _isWaitingStatus(String status) {
+    return status == "WAITING" || status == "PENDING";
+  }
+
+  DateTime? _parseEventTimestamp(dynamic value) {
+    if (value == null) {
+      return null;
+    }
+
+    final timestamp = value is int ? value : int.tryParse(value.toString());
+    if (timestamp == null || timestamp <= 0) {
+      return null;
+    }
+
+    return DateTime.fromMillisecondsSinceEpoch(timestamp);
+  }
+
+  void _startManualConfirmRefreshTimer() {
+    _manualConfirmRefreshTimer?.cancel();
+    _manualConfirmRefreshTimer = Timer.periodic(const Duration(seconds: 5), (
+      _,
+    ) {
+      if (!mounted || !_isWaitingStatus(currentQrStatus)) {
+        _stopManualConfirmRefreshTimer();
+        return;
+      }
+
+      setState(() {});
+    });
+  }
+
+  void _stopManualConfirmRefreshTimer() {
+    _manualConfirmRefreshTimer?.cancel();
+    _manualConfirmRefreshTimer = null;
   }
 
   Widget _buildDeviceCard() {
@@ -508,6 +565,7 @@ class _QrDisplayPageState extends State<QrDisplayPage> {
 
   @override
   void dispose() {
+    _stopManualConfirmRefreshTimer();
     WebSocketService.disconnect();
     super.dispose();
   }
