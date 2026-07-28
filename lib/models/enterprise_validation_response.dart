@@ -6,6 +6,9 @@ class EnterpriseValidationResponse {
   final int? departmentCode;
   final String status;
   final String message;
+  final String token;
+  final int? tokenExpiresAt;
+  final String tokenType;
 
   EnterpriseValidationResponse({
     required this.valid,
@@ -15,10 +18,14 @@ class EnterpriseValidationResponse {
     this.departmentCode,
     required this.status,
     required this.message,
+    required this.token,
+    this.tokenExpiresAt,
+    required this.tokenType,
   });
 
   factory EnterpriseValidationResponse.fromJson(Map<String, dynamic> json) {
     final departmentCodeValue = json["departmentCode"];
+    final tokenExpiresAtValue = json["tokenExpiresAt"];
 
     return EnterpriseValidationResponse(
       valid: json["valid"] == true,
@@ -30,6 +37,11 @@ class EnterpriseValidationResponse {
           : int.tryParse((departmentCodeValue ?? "").toString()),
       status: (json["status"] ?? "").toString(),
       message: (json["message"] ?? "").toString(),
+      token: (json["token"] ?? "").toString(),
+      tokenExpiresAt: tokenExpiresAtValue is int
+          ? tokenExpiresAtValue
+          : int.tryParse((tokenExpiresAtValue ?? "").toString()),
+      tokenType: (json["tokenType"] ?? "Bearer").toString(),
     );
   }
 }

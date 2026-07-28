@@ -8,14 +8,25 @@ class WebSocketService {
 
   static void connect({
     required String terminalId,
+    required String token,
     required Function(Map<String, dynamic>) onTerminalEvent,
     required Function(String) onConnectionLog,
   }) {
     disconnect();
 
+    final authToken = token.trim();
+    if (authToken.isEmpty) {
+      onConnectionLog(
+        "WebSocket skipped: missing JWT token. Please login again.",
+      );
+      return;
+    }
+
+    final uri = Uri.parse(wsUrl).replace(queryParameters: {"token": authToken});
+
     _client = StompClient(
       config: StompConfig.sockJS(
-        url: wsUrl,
+        url: uri.toString(),
         onConnect: (frame) {
           onConnectionLog("WebSocket connected");
 

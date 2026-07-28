@@ -135,6 +135,9 @@ class _RegistrationPageState extends State<RegistrationPage> {
         terminalId: registeredDevice.terminalId,
         deviceIdentifier: registeredDevice.deviceIdentifier,
         deviceName: registeredDevice.deviceName,
+        token: registeredDevice.token,
+        tokenExpiresAt: registeredDevice.tokenExpiresAt,
+        tokenType: registeredDevice.tokenType,
       );
 
       await SessionService.saveSession(session);

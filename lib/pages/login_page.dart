@@ -74,6 +74,9 @@ class _LoginPageState extends State<LoginPage> {
         terminalId: device.terminalId,
         deviceIdentifier: device.deviceIdentifier,
         deviceName: device.deviceName,
+        token: device.token,
+        tokenExpiresAt: device.tokenExpiresAt,
+        tokenType: device.tokenType,
       );
 
       await SessionService.saveSession(session);

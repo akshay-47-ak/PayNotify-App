@@ -74,6 +74,7 @@ class _QrDisplayPageState extends State<QrDisplayPage> {
   void _connectWebSocket() {
     WebSocketService.connect(
       terminalId: widget.session.terminalId,
+      token: widget.session.token,
       onTerminalEvent: (data) {
         final status = (data["status"] ?? "").toString();
         final paymentId = (data["paymentId"] ?? "").toString();

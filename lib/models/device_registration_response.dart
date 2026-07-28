@@ -7,6 +7,9 @@ class DeviceRegistrationResponse {
   final String deviceIdentifier;
   final String deviceName;
   final String status;
+  final String token;
+  final int? tokenExpiresAt;
+  final String tokenType;
 
   DeviceRegistrationResponse({
     required this.deviceId,
@@ -17,9 +20,14 @@ class DeviceRegistrationResponse {
     required this.deviceIdentifier,
     required this.deviceName,
     required this.status,
+    required this.token,
+    this.tokenExpiresAt,
+    required this.tokenType,
   });
 
   factory DeviceRegistrationResponse.fromJson(Map<String, dynamic> json) {
+    final tokenExpiresAtValue = json["tokenExpiresAt"];
+
     return DeviceRegistrationResponse(
       deviceId: json["deviceId"] ?? 0,
       enterpriseCode: (json["enterpriseCode"] ?? "").toString(),
@@ -29,6 +37,11 @@ class DeviceRegistrationResponse {
       deviceIdentifier: (json["deviceIdentifier"] ?? "").toString(),
       deviceName: (json["deviceName"] ?? "").toString(),
       status: (json["status"] ?? "").toString(),
+      token: (json["token"] ?? "").toString(),
+      tokenExpiresAt: tokenExpiresAtValue is int
+          ? tokenExpiresAtValue
+          : int.tryParse((tokenExpiresAtValue ?? "").toString()),
+      tokenType: (json["tokenType"] ?? "Bearer").toString(),
     );
   }
 }

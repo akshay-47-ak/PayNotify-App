@@ -6,6 +6,7 @@ import '../models/device_login_request.dart';
 import '../models/device_registration_request.dart';
 import '../models/enterprise_validation_request.dart';
 import '../models/payment_notify_request.dart';
+import 'session_service.dart';
 
 class ApiService {
   static const String baseUrl = "https://briskly-jawline-grief.ngrok-free.dev";
@@ -31,7 +32,7 @@ class ApiService {
   static Future<Map<String, dynamic>?> sendPaymentNotification(
     PaymentNotifyRequest request,
   ) async {
-    return _post("/api/payment/notify", request.toJson());
+    return _postAuthenticated("/api/payment/notify", request.toJson());
   }
 
   static Future<Map<String, dynamic>?> manuallyConfirmPayment({
@@ -40,20 +41,53 @@ class ApiService {
     String? payerName,
     String? reason,
   }) async {
-    return _post(
+    return _postAuthenticated(
       "/api/payments/${Uri.encodeComponent(paymentId)}/manual-confirm",
       {"utr": utr, "payerName": payerName, "reason": reason},
     );
   }
 
-  static Future<Map<String, dynamic>?> _post(
+  static Future<Map<String, dynamic>?> _postAuthenticated(
     String endpoint,
     Map<String, dynamic> body,
   ) async {
+    final session = await SessionService.getSession();
+    final token = session?.token.trim() ?? "";
+
+    if (token.isEmpty) {
+      developer.log(
+        "API $endpoint skipped: missing JWT token",
+        name: "ApiService",
+      );
+      return {
+        "success": false,
+        "message": "Missing mobile authentication token. Please login again.",
+        "data": null,
+      };
+    }
+
+    return _post(endpoint, body, token: token, tokenType: session?.tokenType);
+  }
+
+  static Future<Map<String, dynamic>?> _post(
+    String endpoint,
+    Map<String, dynamic> body, {
+    String? token,
+    String? tokenType,
+  }) async {
     try {
+      final headers = <String, String>{"Content-Type": "application/json"};
+      final authToken = token?.trim() ?? "";
+      if (authToken.isNotEmpty) {
+        final authType = (tokenType == null || tokenType.trim().isEmpty)
+            ? "Bearer"
+            : tokenType.trim();
+        headers["Authorization"] = "$authType $authToken";
+      }
+
       final response = await http.post(
         Uri.parse("$baseUrl$endpoint"),
-        headers: {"Content-Type": "application/json"},
+        headers: headers,
         body: jsonEncode(body),
       );
 
