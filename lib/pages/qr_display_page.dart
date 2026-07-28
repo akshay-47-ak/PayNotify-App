@@ -50,6 +50,15 @@ class _QrDisplayPageState extends State<QrDisplayPage> {
   bool isManualConfirming = false;
   Timer? _manualConfirmRefreshTimer;
 
+  Uint8List _decodeQrImage(String value) {
+    final commaIndex = value.indexOf(",");
+    final base64Value = value.startsWith("data:image/") && commaIndex >= 0
+        ? value.substring(commaIndex + 1)
+        : value;
+
+    return base64Decode(base64Value);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -524,7 +533,7 @@ class _QrDisplayPageState extends State<QrDisplayPage> {
                 children: [
                   if (currentQrBase64.isNotEmpty)
                     Image.memory(
-                      base64Decode(currentQrBase64),
+                      _decodeQrImage(currentQrBase64),
                       width: 230,
                       height: 230,
                     )
