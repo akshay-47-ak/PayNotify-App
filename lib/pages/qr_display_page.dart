@@ -93,6 +93,9 @@ class _QrDisplayPageState extends State<QrDisplayPage> {
               status.isNotEmpty &&
               shouldUpdateStatus) {
             currentQrStatus = status;
+            if (_isCancelledStatus(status)) {
+              _clearCurrentQrDisplay();
+            }
             if (!_isWaitingStatus(status)) {
               _stopManualConfirmRefreshTimer();
             }
@@ -363,8 +366,10 @@ class _QrDisplayPageState extends State<QrDisplayPage> {
     required String status,
     String eventType = "",
   }) {
-    return eventType != _phonePeConfirmationEvent &&
-        status != _phonePeWaitingConfirmationStatus;
+    return !_isPhonePeConfirmationRequired(
+      status: status,
+      eventType: eventType,
+    );
   }
 
   bool get _canManualConfirmCurrentPayment {
@@ -385,6 +390,24 @@ class _QrDisplayPageState extends State<QrDisplayPage> {
 
   bool _isWaitingStatus(String status) {
     return status == "WAITING" || status == "PENDING";
+  }
+
+  bool _isCancelledStatus(String status) {
+    return status == "CANCELLED_BY_CASHIER";
+  }
+
+  bool _isPhonePeConfirmationRequired({
+    required String status,
+    String eventType = "",
+  }) {
+    return eventType == _phonePeConfirmationEvent ||
+        status == _phonePeWaitingConfirmationStatus;
+  }
+
+  void _clearCurrentQrDisplay() {
+    currentQrBase64 = "";
+    currentQrGeneratedAt = null;
+    _stopManualConfirmRefreshTimer();
   }
 
   DateTime? _parseEventTimestamp(dynamic value) {
