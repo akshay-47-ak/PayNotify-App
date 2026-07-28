@@ -4,6 +4,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../models/active_qr_state.dart';
 import '../models/device_session.dart';
 import '../models/payment_notification.dart';
 import '../services/api_service.dart';
@@ -62,6 +63,7 @@ class _QrDisplayPageState extends State<QrDisplayPage> {
   @override
   void initState() {
     super.initState();
+    _restoreActiveQrState();
     _setupNotificationChannel();
     _connectWebSocket();
 
@@ -97,14 +99,17 @@ class _QrDisplayPageState extends State<QrDisplayPage> {
             currentQrTransactionRef = transactionRef;
             currentQrStatus = status;
             currentQrGeneratedAt = eventTimestamp ?? DateTime.now();
+            _saveCurrentQrState();
             _startManualConfirmRefreshTimer();
           } else if (paymentId.isNotEmpty &&
               paymentId == currentQrPaymentId &&
               status.isNotEmpty &&
               shouldUpdateStatus) {
             currentQrStatus = status;
-            if (_isCancelledStatus(status)) {
+            if (_isTerminalFreeStatus(status)) {
               _clearCurrentQrDisplay();
+            } else {
+              _saveCurrentQrState();
             }
             if (!_isWaitingStatus(status)) {
               _stopManualConfirmRefreshTimer();
@@ -158,6 +163,11 @@ class _QrDisplayPageState extends State<QrDisplayPage> {
               shouldUpdateStatus) {
             setState(() {
               currentQrStatus = resultStatus;
+              if (_isTerminalFreeStatus(resultStatus)) {
+                _clearCurrentQrDisplay();
+              } else {
+                _saveCurrentQrState();
+              }
             });
           }
 
@@ -258,6 +268,11 @@ class _QrDisplayPageState extends State<QrDisplayPage> {
         }
         if (status.isNotEmpty) {
           currentQrStatus = status;
+        }
+        if (_isTerminalFreeStatus(status)) {
+          _clearCurrentQrDisplay();
+        } else {
+          _saveCurrentQrState();
         }
       });
 
@@ -365,6 +380,56 @@ class _QrDisplayPageState extends State<QrDisplayPage> {
     });
   }
 
+  Future<void> _restoreActiveQrState() async {
+    final savedState = await SessionService.getActiveQrState(
+      widget.session.terminalId,
+    );
+
+    if (!mounted || savedState == null) {
+      return;
+    }
+
+    final generatedAt = savedState.generatedAtMillis > 0
+        ? DateTime.fromMillisecondsSinceEpoch(savedState.generatedAtMillis)
+        : DateTime.now();
+
+    setState(() {
+      currentQrBase64 = savedState.qrImageBase64;
+      currentQrPaymentId = savedState.paymentId;
+      currentQrTransactionRef = savedState.transactionRef;
+      currentQrStatus = savedState.status;
+      currentQrGeneratedAt = generatedAt;
+    });
+
+    if (_isWaitingStatus(savedState.status)) {
+      _startManualConfirmRefreshTimer();
+    }
+
+    _addLog(
+      "Restored active QR | paymentId=${savedState.paymentId} | "
+      "status=${savedState.status}",
+    );
+  }
+
+  Future<void> _saveCurrentQrState() async {
+    if (currentQrPaymentId.isEmpty || currentQrBase64.isEmpty) {
+      return;
+    }
+
+    final generatedAt = currentQrGeneratedAt ?? DateTime.now();
+
+    await SessionService.saveActiveQrState(
+      widget.session.terminalId,
+      ActiveQrState(
+        paymentId: currentQrPaymentId,
+        transactionRef: currentQrTransactionRef,
+        status: currentQrStatus,
+        qrImageBase64: currentQrBase64,
+        generatedAtMillis: generatedAt.millisecondsSinceEpoch,
+      ),
+    );
+  }
+
   void _showSnackBar(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(
@@ -406,6 +471,13 @@ class _QrDisplayPageState extends State<QrDisplayPage> {
     return status == "CANCELLED_BY_CASHIER";
   }
 
+  bool _isTerminalFreeStatus(String status) {
+    return status == "PAID_AUTO_VERIFIED" ||
+        status == "PAID_CONFIRMED_BY_CASHIER" ||
+        status == "EXPIRED" ||
+        _isCancelledStatus(status);
+  }
+
   bool _isPhonePeConfirmationRequired({
     required String status,
     String eventType = "",
@@ -416,8 +488,12 @@ class _QrDisplayPageState extends State<QrDisplayPage> {
 
   void _clearCurrentQrDisplay() {
     currentQrBase64 = "";
+    currentQrPaymentId = "";
+    currentQrTransactionRef = "";
+    currentQrStatus = "";
     currentQrGeneratedAt = null;
     _stopManualConfirmRefreshTimer();
+    SessionService.clearActiveQrState(widget.session.terminalId);
   }
 
   DateTime? _parseEventTimestamp(dynamic value) {
