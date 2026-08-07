@@ -146,51 +146,66 @@ class _QrDisplayPageState extends State<QrDisplayPage> {
             "Notification captured: ${notification.packageName} | ${notification.title}",
           );
 
-          final result = await NotificationHandler.processNotification(
-            notification,
-            widget.session,
-          );
-          final resultPaymentId = (result["paymentId"] ?? "").toString();
-          final resultStatus = (result["status"] ?? "").toString();
-          final shouldUpdateStatus = _shouldApplyTerminalStatus(
-            status: resultStatus,
-          );
+          final notificationsToProcess =
+              NotificationHandler.expandNotificationsForProcessing(
+                notification,
+              );
 
-          if (mounted &&
-              resultPaymentId.isNotEmpty &&
-              resultPaymentId == currentQrPaymentId &&
-              resultStatus.isNotEmpty &&
-              shouldUpdateStatus) {
-            setState(() {
-              currentQrStatus = resultStatus;
-              if (_isTerminalFreeStatus(resultStatus)) {
-                _clearCurrentQrDisplay();
-              } else {
-                _saveCurrentQrState();
-              }
-            });
-          }
-
-          if (!shouldUpdateStatus) {
+          if (notificationsToProcess.length > 1) {
             _addLog(
-              "PhonePe matched. Confirm or reject from the cashier web screen.",
+              "PhonePe grouped notification split into ${notificationsToProcess.length} server messages.",
             );
           }
 
-          _addLog(
-            "Notification processed | "
-            "sent=${result["sent"]} | "
-            "status=${result["status"]} | "
-            "txnRef=${result["transactionRef"] ?? ""} | "
-            "paymentId=${result["paymentId"] ?? ""} | "
-            "notificationId=${result["notificationId"] ?? ""} | "
-            "utr=${result["utr"] ?? ""} | "
-            "amountMatched=${result["amountMatched"] ?? ""} | "
-            "expectedAmount=${result["expectedAmount"] ?? ""} | "
-            "receivedAmount=${result["receivedAmount"] ?? ""} | "
-            "payerName=${result["payerName"] ?? ""} | "
-            "message=${result["message"] ?? ""}",
-          );
+          for (var index = 0; index < notificationsToProcess.length; index++) {
+            final notificationToProcess = notificationsToProcess[index];
+            final result = await NotificationHandler.processNotification(
+              notificationToProcess,
+              widget.session,
+            );
+            final resultPaymentId = (result["paymentId"] ?? "").toString();
+            final resultStatus = (result["status"] ?? "").toString();
+            final shouldUpdateStatus = _shouldApplyTerminalStatus(
+              status: resultStatus,
+            );
+
+            if (mounted &&
+                resultPaymentId.isNotEmpty &&
+                resultPaymentId == currentQrPaymentId &&
+                resultStatus.isNotEmpty &&
+                shouldUpdateStatus) {
+              setState(() {
+                currentQrStatus = resultStatus;
+                if (_isTerminalFreeStatus(resultStatus)) {
+                  _clearCurrentQrDisplay();
+                } else {
+                  _saveCurrentQrState();
+                }
+              });
+            }
+
+            if (!shouldUpdateStatus) {
+              _addLog(
+                "PhonePe matched. Confirm or reject from the cashier web screen.",
+              );
+            }
+
+            _addLog(
+              "Notification processed | "
+              "part=${index + 1}/${notificationsToProcess.length} | "
+              "sent=${result["sent"]} | "
+              "status=${result["status"]} | "
+              "txnRef=${result["transactionRef"] ?? ""} | "
+              "paymentId=${result["paymentId"] ?? ""} | "
+              "notificationId=${result["notificationId"] ?? ""} | "
+              "utr=${result["utr"] ?? ""} | "
+              "amountMatched=${result["amountMatched"] ?? ""} | "
+              "expectedAmount=${result["expectedAmount"] ?? ""} | "
+              "receivedAmount=${result["receivedAmount"] ?? ""} | "
+              "payerName=${result["payerName"] ?? ""} | "
+              "message=${result["message"] ?? ""}",
+            );
+          }
         } catch (e) {
           _addLog("Notification handling error: $e");
         }

@@ -137,6 +137,10 @@ class NotificationHandler {
 
     final regexes = [
       RegExp(
+        r'([A-Za-z][A-Za-z .]{1,80})\s+has\s+sent\b',
+        caseSensitive: false,
+      ),
+      RegExp(
         r'(?:received from|paid by|from)\s+([A-Za-z][A-Za-z .]{1,60})',
         caseSensitive: false,
       ),
@@ -160,7 +164,7 @@ class NotificationHandler {
   static String appNameForPackage(String packageName) {
     final value = packageName.trim().toLowerCase();
 
-    if (value.contains("phonepe") || value.contains("com.phonepe.app")) {
+    if (isPhonePePackage(packageName)) {
       return "PHONEPE";
     }
 
@@ -187,6 +191,97 @@ class NotificationHandler {
     }
 
     return DateTime.fromMillisecondsSinceEpoch(timestamp);
+  }
+
+  static List<PaymentNotification> expandNotificationsForProcessing(
+    PaymentNotification notification,
+  ) {
+    if (!isPhonePePackage(notification.packageName)) {
+      return [notification];
+    }
+
+    final lines = extractPhonePeGroupedPaymentLines(notification);
+    if (lines.length <= 1) {
+      return [notification];
+    }
+
+    return lines
+        .map(
+          (line) => PaymentNotification(
+            packageName: notification.packageName,
+            title: "PhonePe payment received",
+            text: line,
+            subText: null,
+            bigText: null,
+            timestamp: notification.timestamp,
+          ),
+        )
+        .toList();
+  }
+
+  static bool isPhonePePackage(String packageName) {
+    final value = packageName.trim().toLowerCase();
+    return value == "com.phonepe.app" ||
+        value == "com.phonepe.app.business" ||
+        value.contains("phonepe");
+  }
+
+  static List<String> extractPhonePeGroupedPaymentLines(
+    PaymentNotification notification,
+  ) {
+    if (!isPhonePePackage(notification.packageName)) {
+      return const [];
+    }
+
+    final title = notification.title.toLowerCase();
+    final message = _buildMessage(notification);
+    final looksGrouped =
+        title.contains("completed transaction updates") ||
+        title.contains("new completed transaction updates") ||
+        RegExp(r'^\s*\d+\s+new\s+', caseSensitive: false).hasMatch(title);
+
+    if (!looksGrouped || !message.contains("\n")) {
+      return const [];
+    }
+
+    final lines = <String>[];
+    final seen = <String>{};
+
+    for (final rawLine in message.split(RegExp(r'\r?\n'))) {
+      final line = rawLine
+          .trim()
+          .replaceFirst(RegExp(r'^[⋅•\.\-\s]+'), "")
+          .trim();
+      if (!_isCompletePhonePePaymentLine(line)) {
+        continue;
+      }
+
+      final normalized = line.toLowerCase();
+      if (seen.add(normalized)) {
+        lines.add(line);
+      }
+    }
+
+    return lines;
+  }
+
+  static bool _isCompletePhonePePaymentLine(String line) {
+    if (line.trim().isEmpty || extractAmount(line) == null) {
+      return false;
+    }
+
+    final value = line.toLowerCase();
+    final hasPaymentAction =
+        value.contains("has sent") ||
+        value.contains("sent") ||
+        value.contains("received") ||
+        value.contains("paid");
+    final hasDestination =
+        value.contains("bank account") ||
+        value.contains("account") ||
+        value.contains("upi");
+
+    return hasPaymentAction && hasDestination;
   }
 
   static String backendLocalDateTime(DateTime value) {
