@@ -91,8 +91,21 @@ class NotificationListenerServiceImpl : NotificationListenerService() {
             "timestamp" to sbn.postTime
         )
 
+        val activeMethodChannel = MainActivity.methodChannel
+        if (activeMethodChannel == null) {
+            NativePaymentNotificationProcessor(applicationContext).processAsync(
+                packageName = sbn.packageName,
+                title = title,
+                text = text,
+                subText = subText,
+                bigText = bigText,
+                timestamp = sbn.postTime
+            )
+            return
+        }
+
         Handler(Looper.getMainLooper()).post {
-            MainActivity.methodChannel?.invokeMethod("onNotificationReceived", data)
+            activeMethodChannel.invokeMethod("onNotificationReceived", data)
         }
     }
 
